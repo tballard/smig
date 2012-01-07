@@ -1,3 +1,8 @@
+This is a wrapper for the MigLayout java layout manager for use from Scala.
+Pretty much alpha and my first Scala project, but still not totally without
+merit, I think.  One objective was to strongly type the heck out of
+it.  Another was to make it somewhat easier to debug.
+
 This is the root directory of a netbeans project.  The jars directory needs
 to  have miglayout-4.0-swing.jar and miglayout-4.0-swing.jar or some such
 in it.  Or use it in some IDE that handles it better.  I was just using
