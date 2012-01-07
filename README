@@ -1,0 +1,4 @@
+This is the root directory of a netbeans project.  The jars directory needs
+to  have miglayout-4.0-swing.jar and miglayout-4.0-swing.jar or some such
+in it.  Or use it in some IDE that handles it better.  I was just using
+netbeans in general.
