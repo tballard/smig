@@ -32,7 +32,7 @@ object MigDemo extends SimpleSwingApplication {
       // Add popups that show constraints
       debugTip
       // Add conventional debug even without LC in constructor
-      debug()
+      debug(500)
       add(new Label("NewsGator Account") {             
           font = font.deriveFont(BOLD)
           background = green
