@@ -14,12 +14,7 @@ import scala.swing.SimpleSwingApplication
 import scala.swing.Swing
 import scala.swing.Swing._
 import scala.util.Random
-import smig.LC
-import smig.MigPanel
-import smig.ColC
-import smig.PCT
-import smig.PX
-import smig.RowC
+import smig.{MigPanel, LC, RowC, ColC, PX, PCT }
 import smig.Dock._
 import smig.XPos._
 import smig.YPos._
@@ -28,16 +23,22 @@ object MigDemo extends SimpleSwingApplication {
   override def top = new MainFrame {
     title = "Baby App"
     contents = new MigPanel (
-      LC().fillX.flowX.insets(2),
+      // Create LC, set some params, note insets convert int to PX
+      LC().fillX.flowX.insets(2).debug(),
+      // Note we used derived classes of AC for a bit better checking
       RowC().grow(6.0F).align(Ytop).i(1).align(Ybottom),
       ColC().align(Xleft)
     ){
+      // Add popups that show constraints
       debugTip
+      // Add conventional debug even without LC in constructor
+      debug()
       add(new Label("NewsGator Account") {             
           font = font.deriveFont(BOLD)
           background = green
           border = TitledBorder(EtchedBorder, "One") 
         }).cell(0, 0)
+      // Note that add method returns a CC for chaining
       add(new Label("Other Account")).cell(1, 0)
       add(new Label("<html>thing-a<br>ma-jig</html>") {             
           font = font.deriveFont(ITALIC)
@@ -76,7 +77,7 @@ object MigDemo extends SimpleSwingApplication {
   }
   
   def eastPanel = new MigPanel (
-    LC().flowX,
+    LC().flowX.debug,
     RowC().align(Ybottom),
     ColC().i(0).align(Xright).i(1).align(Xleft).fill
   ){
@@ -95,7 +96,7 @@ object MigDemo extends SimpleSwingApplication {
   }
   
   def randPanel = new MigPanel (
-    LC().flowX
+    LC().flowX.debug
   ){
     debugTip
     border = TitledBorder(EtchedBorder(Lowered), "Fourteen")
