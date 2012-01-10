@@ -8,7 +8,10 @@ import net.miginfocom.swing.MigLayout
 import net.miginfocom.layout.ComponentWrapper
 import net.miginfocom.layout.ConstraintParser
 import net.miginfocom.layout.LayoutCallback
+import net.miginfocom.layout.LayoutUtil
 import net.miginfocom.layout.UnitValue
+import java.awt.Color
+import java.awt.Dimension
 import java.awt.event.ContainerEvent
 import java.awt.event.ContainerListener
 import javax.swing.JPanel
@@ -21,6 +24,8 @@ import scala.swing.LayoutContainer
 import scala.swing.Panel
 
 /**
+ * First things first.  A smig is a kind of beard.  Sorta the goatee motif.
+ * 
  * This is a wrapper for the mig layout manager for use from Scala.
  * This was my first Scala project, so it probably has some lame points.
  * It was designed to make things more type-safe than the java version
@@ -60,6 +65,15 @@ object AlignX {
   implicit def toAlignX(f: Float) = new AlignX(f.toString)
   implicit def toAlignX(p: PCT) = new AlignX(p._value.getValue + "%")
   implicit def toAlignX(uv: UV) = new AlignX(uv.toString)
+  implicit def toAlignX(uv : UnitValue) = 
+    new AlignX(uv.getValue + UV.typeString(uv.getUnit))
+  
+  lazy val ZERO = AlignX.toAlignX(PX(0))
+  lazy val CENTER = AlignX.toAlignX(PCT(50))
+  lazy val LEFT = AlignX.toAlignX(PCT(0))
+  lazy val RIGHT = AlignX.toAlignX(PCT(100))
+  lazy val LEADING = AlignX.toAlignX(PCT(0))
+  lazy val TRAILING = AlignX.toAlignX(PCT(100))
 }
 
 class AlignY private[smig](a: String) {
@@ -71,6 +85,13 @@ object AlignY  {
   implicit def toAlignY(f: Float) = new AlignY(f.toString)
   implicit def toAlignY(p: PCT) = new AlignY(p._value.getValue + "%")
   implicit def toAlignY(uv: UV) = new AlignY(uv.toString)
+  
+  lazy val ZERO = AlignY.toAlignY(PX(0))
+  lazy val CENTER = AlignY.toAlignY(PCT(50))
+  lazy val TOP = AlignY.toAlignY(PCT(0))
+  lazy val BOTTOM = AlignY.toAlignY(PCT(100))
+  lazy val LEADING = AlignY.toAlignY(PCT(0))
+  lazy val TRAILING = AlignY.toAlignY(PCT(100))
 }
 
 /** These are specialized X alignments. Substring(1) of the name is the
@@ -131,7 +152,7 @@ object UV {
       }
     }
   }
-  private def typeString(i: Int) : String = {
+  private[smig] def typeString(i: Int) : String = {
     i match {
       case UnitValue.PIXEL => "px"
       case UnitValue.LPX => "lpx"
@@ -1086,6 +1107,8 @@ extends Panel with LayoutContainer {
       })
   }
   
+  private[smig] def cc = new CC()
+  
   /** 
    *   CCCC    CCCC
    *  C       C
@@ -1161,14 +1184,14 @@ extends Panel with LayoutContainer {
     def isExternal : Boolean = _cc.isExternal
     
     /**
-    * Convenience method for what is required to make something fill space in
-    * the X direction.  It is shorthand for growX.pushX
-    */
+     * Convenience method for what is required to make something fill space in
+     * the X direction.  It is shorthand for growX.pushX
+     */
     def fillX : this.type = { _cc.growX; _cc.pushX; this }
     /**
-    * Convenience method for what is required to make something fill space in
-    * the X direction.  It is shorthand for growX.pushX
-    */
+     * Convenience method for what is required to make something fill space in
+     * the X direction.  It is shorthand for growX.pushX
+     */
     def fillY : this.type = { _cc.growY; _cc.pushY; this }
     
     /** Flow direction within cell */
@@ -1271,8 +1294,7 @@ extends Panel with LayoutContainer {
      * "pushX" indicates that the column that this component is in (the first
      * if the component spans several) should default to growing.  If any column
      * has been set to push, this value on the component does nothing as
-     * row push takes precedence.  Push is normally used when the grid has 
-     * not been defined in the layout.
+     * column push takes precedence. 
      */
     def pushX(weight: Float) : this.type = { _cc.pushX(weight); this }
     def getPushX : Option[Float] = {
@@ -1284,8 +1306,7 @@ extends Panel with LayoutContainer {
      * "pushY" indicates that the row that this component is in (the first
      * if the component spans) should default to growing.  If any row
      * has been set to push, this value on the component does nothing as
-     * column push takes precedence.  Push is normally used when the grid has 
-     * not been defined in the layout.
+     * row push takes precedence.
      */
     def pushY(weight: Float) : this.type = { _cc.pushY(weight); this }
     def getPushY : Option[Float] = {
@@ -1398,5 +1419,158 @@ extends Panel with LayoutContainer {
     
     /** The java peer */
     def java = _cc
+  }
+  
+  object Util {
+    private var _groupNum: Int = 0;
+    /* MigLayout does not define constants for the hidemode parameters. */
+    val HIDEMODE_NORMAL_SIZE = 0;
+    val HIDEMODE_ZERO_SIZE = 1;
+    val HIDEMODE_ZERO_SIZE_NO_GAP = 2;
+    val HIDEMODE_NO_PARTICIPATION = 3;
+    val _HUGE_DIST = LayoutUtil.INF;
+    val _TINY_DIM = new Dimension(0, 0);
+    val _HUGE_DIM = new Dimension(_HUGE_DIST, _HUGE_DIST);
+    val _HORZ_HUGE_DIM = new Dimension(_HUGE_DIST, 0);
+    val _VERT_HUGE_DIM = new Dimension(0, _HUGE_DIST);
+    val _NARROW = 3;
+    val CLEAR: Color = new Color(0, true)
+
+    /** Assume done in awt dispatch thread */
+    def getGroupName : String = "MigUtilBtnGroup_" + (_groupNum += 1);
+
+    /**
+     * The Layout should already be on the correct cell, probably as the
+     * result of a wrap
+     * @param container add in this container which is using MigLayout
+     * @param btns add this components, centered on row and with same width
+     */
+    def addBtnRow(migPanel: MigPanel, sameSize: Boolean, 
+                  btns: Component*) : Unit = {
+      addBtnRow(-1, migPanel, sameSize, btns:_*)
+    }
+
+    /** 
+     * Flow in layout should be X
+     * @param row Add on this row unless < 0
+     * @param container add in this container which is using MigLayout
+     * @param sameSize true to coerce buttons (or whatever) to same size
+     * @param btns add these components, centered on row and with same width
+     */
+    def addBtnRow(row: Int, migPanel: MigPanel, sameSize: Boolean,
+                  btns: Component*) {
+      require(migPanel.getLC.isFlowX)
+      val spaceSizeGroup = getGroupName
+      var btnSizeGroup: String = null
+      if (sameSize) {
+        btnSizeGroup = getGroupName
+      }
+      val cc = migPanel.cc
+      if (row >= 0) {
+        cc.cell(0, row)
+      }
+      val bs0 = BS.toBS(0)
+      migPanel.add(new Pad()).spanX.split(btns.length * 2 + 3).
+      flowX.sizeGroupX(spaceSizeGroup).gapLeft(bs0).gapRight(bs0).
+      gapTop(bs0).gapBottom(bs0).growX
+      val cs = migPanel.cc.sizeGroupX(spaceSizeGroup).
+      gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).fillX
+      val cb = migPanel.cc.gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0)
+      if (sameSize) {
+        cb.sizeGroupX(btnSizeGroup)
+      }
+      btns.foreach(comp => {
+          migPanel.add(new Pad(), cs)
+          migPanel.add(comp, cb)
+        })
+      migPanel.add(new Pad(), cs)
+      migPanel.add(new Pad(), cs)
+    }
+
+    private[smig] class Pad extends Component {
+      background = CLEAR
+    }
+
+    /**
+     * Create a transparent {@code component} with huge maximum width.
+     * Using it with .fill will make it take up space.
+     *
+     * @return A transparent horizontally springy component
+     */
+    def createHorzSpring : Spring = new Spring(Direction.X)
+
+    def createVertSpring : Spring = new Spring(Direction.Y)
+
+    def create2WaySpring : Spring = new Spring(Direction.XY)
+
+    object Direction extends Enumeration {
+      val X, Y, XY = Value
+    }
+
+    class Spring private[smig] (direction: Direction.Value) extends JPanel {
+      protected val _direction = direction
+      protected var _debug: Boolean = _
+      background = CLEAR
+      
+      private def dim(dim: Dimension) : Dimension = {
+        if (_debug) new Dimension(
+          if (dim.width < _NARROW) _NARROW else dim.width, 
+          if (dim.height < _NARROW) _NARROW else dim.height) 
+        else dim;
+      }
+      
+      def debug: Spring = {
+        _debug = true
+        name = _direction.toString + " Spring"
+        opaque = true
+        background = new Color((Color.RED.getRGB() & (~0 >> 8)) | (0x80 << 24))
+        this
+      }
+
+      override def getMinimumSize: Dimension = dim(_TINY_DIM)
+      override def getPreferredSize: Dimension = dim(_TINY_DIM)
+
+      override def getMaximumSize: Dimension = {
+        _direction match {
+          case Direction.X => dim(_HORZ_HUGE_DIM);
+          case Direction.Y => dim(_VERT_HUGE_DIM);
+          case _ => dim(_HUGE_DIM);
+        }
+      }
+    }
+
+    class Strut(direction: Direction.Value, size: Int) extends JPanel {
+      val _direction: Direction.Value = direction
+      val _size = size
+      var _debug : Boolean = _
+
+      def debug : Strut = {
+        _debug = true
+        name = _direction.toString + " Strut"
+        opaque = true
+        background = new Color((Color.RED.getRGB() & (~0 >> 8)) | (0x80 << 24))
+        this;
+      }
+
+      override def getMinimumSize: Dimension = {
+        _direction match {
+          case Direction.X => new Dimension(_size, if (_debug) _NARROW else 0)
+          case Direction.Y => new Dimension(if (_debug) _NARROW else 0, _size)
+          case _ => null 
+        }
+      }
+
+      override def getPreferredSize: Dimension = getMinimumSize
+
+      override def getMaximumSize: Dimension = {
+        _direction match {
+          case Direction.X => 
+            new Dimension(Short.MaxValue, if (_debug) _NARROW else 0)
+          case Direction.Y => 
+            new Dimension(if (_debug) _NARROW else 0, Short.MaxValue);
+          case _ => null
+        }
+      }
+    }
   }
 }
