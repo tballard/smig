@@ -16,11 +16,10 @@ import scala.swing.Swing._
 import scala.util.Random
 import smig.AlignX
 import smig.AlignX._
-import smig.{MigPanel, LC, RowC, ColC, PX, PCT }
+import smig.{BS, MigPanel, LC, RowC, ColC, PX, PCT, UV }
 import smig.Dock._
 import smig.XPos._
 import smig.YPos._
-import tom.bug.Debug
 
 object MigDemo extends SimpleSwingApplication {
   override def top = new MainFrame {
@@ -38,9 +37,11 @@ object MigDemo extends SimpleSwingApplication {
       // Add conventional debug even without LC in constructor
       debug(500)
       add(wrapDemo)
-      add(shrinkDemo).newline
-      add(growDemo).spanX.pushX.growX.newline
-      add(centeredDemo).spanX.pushX.growX.newline.wrap
+      add(shrinkDemo).nl
+      add(growDemo).spanX.pushX.growX.nl
+      add(centeredDemo).spanX.pushX.growX.nl
+      add(gapDemo).spanX.pushX.growX.nl
+      add(sizeGroupDemo).nl.wrap
       add(new TBLbl("New Skater Account", "One") {             
           font = font.deriveFont(BOLD)
           background = green
@@ -183,11 +184,31 @@ object MigDemo extends SimpleSwingApplication {
     border = titled("Centering")
     add(new BLbl("Center me, baby") {
       }).alignX(CENTER).pushX
-}
+  }
+  
+  def gapDemo = new MigPanel() {
+    border = titled("Gaps")
+    val bs = BS(5, 10, UV.INF)
+    val zero = BS(0, 0, 0)
+    add(new BLbl("Gap me all around, baby") {
+      }).gapLeft(bs).gapRight(bs).gapTop(bs).gapBottom(bs)
+    add(new BLbl("I got no gaps specified!") {
+      })
+    add(new BLbl("I got all gap 0") {
+      }).gapLeft(zero).gapRight(zero).gapTop(zero).gapBottom(zero)
+  }
 
   def sizeGroupDemo = new MigPanel() {
-    border = titled("Size Group")
-    
+    border = titled("Even/Odd size groups")
+    add(new BLbl("0")).sizeGroupX("even")
+    add(new BLbl("1")).sizeGroupX("odd")
+    add(new BLbl("10")).sizeGroupX("even")
+    add(new BLbl("11")).sizeGroupX("odd")
+    add(new BLbl("100")).sizeGroupX("even")
+    add(new BLbl("101")).sizeGroupX("odd")
+    add(new BLbl("1000")).sizeGroupX("even")
+    add(new BLbl("1001")).sizeGroupX("odd")
+    add(new BLbl("100000")).sizeGroupX("even")
   }
   
   def titled(title: String) = { 
