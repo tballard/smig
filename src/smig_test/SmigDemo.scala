@@ -14,10 +14,13 @@ import scala.swing.SimpleSwingApplication
 import scala.swing.Swing
 import scala.swing.Swing._
 import scala.util.Random
+import smig.AlignX
+import smig.AlignX._
 import smig.{MigPanel, LC, RowC, ColC, PX, PCT }
 import smig.Dock._
 import smig.XPos._
 import smig.YPos._
+import tom.bug.Debug
 
 object MigDemo extends SimpleSwingApplication {
   override def top = new MainFrame {
@@ -36,7 +39,8 @@ object MigDemo extends SimpleSwingApplication {
       debug(500)
       add(wrapDemo)
       add(shrinkDemo).newline
-      add(growDemo).spanX.pushX.growX.newline.wrap
+      add(growDemo).spanX.pushX.growX.newline
+      add(centeredDemo).spanX.pushX.growX.newline.wrap
       add(new TBLbl("New Skater Account", "One") {             
           font = font.deriveFont(BOLD)
           background = green
@@ -175,6 +179,17 @@ object MigDemo extends SimpleSwingApplication {
     add(new Label("Six"))
   }
   
+  def centeredDemo = new MigPanel() {
+    border = titled("Centering")
+    add(new BLbl("Center me, baby") {
+      }).alignX(CENTER).pushX
+}
+
+  def sizeGroupDemo = new MigPanel() {
+    border = titled("Size Group")
+    
+  }
+  
   def titled(title: String) = { 
     TitledBorder(bord, title)
   }
@@ -188,5 +203,7 @@ object MigDemo extends SimpleSwingApplication {
   class TBLbl(text: String, title: String) extends Label(text) {
     border = titled(title)
   }
+  
+  
 }
 
