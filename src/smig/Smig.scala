@@ -126,6 +126,8 @@ class UV private[smig] (uv: UnitValue) {
   }
 }
 object UV {
+  /** "Infinite" UV */
+  lazy val INF = toUV(LayoutUtil.INF)
   
   implicit def toUV(f: Float) : UV = {
     PX(f)
@@ -1210,8 +1212,19 @@ extends Panel with LayoutContainer {
     def gapLeft(bs: BS) : this.type = { _cc.gapLeft(bs.toString); this }
     /** Gap below a component */
     def gapBottom(bs: BS) : this.type = { _cc.gapBottom(bs.toString); this }
+    def gapB(bs: BS) = gapBottom(bs)
     /** Gap right of a component */
     def gapRight(bs: BS) : this.type = { _cc.gapRight(bs.toString); this }
+    def gapX(left: BS, right: BS) : this.type = { 
+      gapLeft(left)
+      gapRight(right)
+      this
+    }
+    def gapY(top: BS, bottom: BS) : this.type = { 
+      gapTop(top);
+      gapBottom(bottom); 
+      this
+    }
     
     /** X growth weight for when several items in cell, default 100F */
     def growX : this.type = growX(100.0F)
@@ -1234,6 +1247,7 @@ extends Panel with LayoutContainer {
       _cc.growPrioX(i)
       this
     }
+    def grpx(i: Int) = growPrioX(i)
     
     /** The grow priority compared to other components in the same cell. */
     def growPrioY(i: Int) : this.type = {
@@ -1241,6 +1255,7 @@ extends Panel with LayoutContainer {
       _cc.growPrioY(i)
       this
     }
+    def grpy(i: Int) = growPrioY(i)
     
     /** The minimum width for the component. The value will override any value 
      that is set on the component itself. */
@@ -1248,6 +1263,7 @@ extends Panel with LayoutContainer {
     
     /** The width for the component as a bound size */
     def width(bs: BS) : this.type = { _cc.width(bs.toString); this }
+    def w(bs: BS) = width(bs)
     
     /** The maximum width for the component. The value will override any value 
      that is set on the component itself. */
@@ -1259,6 +1275,7 @@ extends Panel with LayoutContainer {
     
     /** The height for the component as a bound size */
     def height(bs: BS) : this.type = { _cc.height(bs.toString); this }
+    def h(bs: BS) = height(bs)
     
     /** The maximum height for the component. The value will override any value 
      that is set on the component itself. */
@@ -1269,6 +1286,7 @@ extends Panel with LayoutContainer {
      * a gap at the same time but I say use the gap functions.
      */
     def newline : this.type = { _cc.newline; this }
+    def nl = newline
     def isNewline : Boolean = _cc.isNewline
     
     def pad(top: UV, left: UV, bottom: UV, right: UV) : this.type = {
@@ -1493,7 +1511,7 @@ extends Panel with LayoutContainer {
 
     /**
      * Create a transparent {@code component} with huge maximum width.
-     * Using it with .fill will make it take up space.
+     * Using it with .fill? will make it take up space.
      *
      * @return A transparent horizontally springy component
      */
