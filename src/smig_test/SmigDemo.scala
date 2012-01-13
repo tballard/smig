@@ -5,18 +5,24 @@
 package mig_test
 
 import java.awt.Color._
-import java.awt.Font
+import java.awt.{
+  Dimension,
+  Font
+}
 import java.awt.Font._
-import scala.swing.Label
-import scala.swing.Label
-import scala.swing.MainFrame
-import scala.swing.SimpleSwingApplication
-import scala.swing.Swing
+import scala.swing.{
+  Button,
+  Component,
+  Label,
+  MainFrame,
+  Panel,
+  SimpleSwingApplication,
+  Swing
+}
 import scala.swing.Swing._
 import scala.util.Random
-import smig.AlignX
+import smig.{AlignX, BS, MigPanel, LC, RowC, ColC, PX, PCT, UV }
 import smig.AlignX._
-import smig.{BS, MigPanel, LC, RowC, ColC, PX, PCT, UV }
 import smig.Dock._
 import smig.XPos._
 import smig.YPos._
@@ -31,7 +37,6 @@ object MigDemo extends SimpleSwingApplication {
       RowC().grow(6.0F).align(Ytop).i(1).align(Ybottom),
       ColC().align(Xleft)
     ){
-      println("Top 2")
       // Add tool tips that show constraints
       debugTip
       // Add conventional debug even without LC in constructor
@@ -41,6 +46,8 @@ object MigDemo extends SimpleSwingApplication {
       add(growDemo).spanX.pushX.growX.nl
       add(centeredDemo).spanX.pushX.growX.nl
       add(gapDemo).spanX.pushX.growX.nl
+      add(buttonsDemo).spanX.pushX.growX.nl 
+      add(springDemo).height(130).fillX.nl
       add(sizeGroupDemo).nl.wrap
       add(new TBLbl("New Skater Account", "One") {             
           font = font.deriveFont(BOLD)
@@ -207,8 +214,36 @@ object MigDemo extends SimpleSwingApplication {
     add(new BLbl("100")).sizeGroupX("even")
     add(new BLbl("101")).sizeGroupX("odd")
     add(new BLbl("1000")).sizeGroupX("even")
-    add(new BLbl("1001")).sizeGroupX("odd")
+    add(new BLbl("103")).sizeGroupX("odd")
     add(new BLbl("100000")).sizeGroupX("even")
+  }
+  
+  def springDemo = new MigPanel() {
+    border = titled("Spring Demo")
+    debugTip
+    val dim = new Dimension(20, 20)
+    for (x <- 0 to 6) {
+      for (y <- 0 to 4) {
+        val xOdd = x % 2 == 1
+        val yOdd = y % 2 == 1
+        (if (xOdd && yOdd) {
+            add(new Panel() { preferredSize = dim; background = blue }).cell(x, y)
+          } else if (xOdd) {
+            if (x == 1) {
+              addYSpringDebug.cell(x, y)
+            }
+          } else if (yOdd) {
+            if (y == 1) {
+              addXSpringDebug.cell(x, y)
+            }
+          })
+      }
+    }
+  }
+  
+  def buttonsDemo = new MigPanel() {
+    border = titled("Button Demo")
+    addBtnRow(true, new Button("Exit"), new Button("Bail"), new Button("Quit"))
   }
   
   def titled(title: String) = { 
@@ -224,7 +259,5 @@ object MigDemo extends SimpleSwingApplication {
   class TBLbl(text: String, title: String) extends Label(text) {
     border = titled(title)
   }
-  
-  
 }
 
