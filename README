@@ -1,7 +1,12 @@
 This is a wrapper for the MigLayout java layout manager for use from Scala.
 Pretty much alpha and my first Scala project, but still not totally without
 merit, I think.  One objective was to strongly type the heck out of
-it.  Another was to make it somewhat easier to debug.
+it.  Another was to make it somewhat easier to debug.  I also rethought
+way cells are specified and moved some parts of the API to where I like
+them better.  I'm not too excited to use the java version, now, since this 
+is so much better. ;-)
+
+The demo is worth your time.
 
 This file is in the root directory of a netbeans project.  The jars directory
 needs to  have miglayout-4.0-swing.jar and miglayout-4.0-swing.jar or some such
