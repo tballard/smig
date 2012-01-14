@@ -353,17 +353,17 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
    * The grid will wrap to a new column/row after a certain number of columns 
    * (for horizontal flow) or rows (for vertical flow).
    */
-  def getWrapAfter = _lc.getWrapAfter
+//  def getWrapAfter = _lc.getWrapAfter
    
   /** 
    * Explicitly specify where to wrap.  I need to be convinced of the 
    * value of wrap() before implementing it.
    */
-  def wrapAfter(i: Int) : this.type = {
-    require(i >= 0)
-    _lc.wrapAfter(i)
-    this
-  }
+//  def wrapAfter(i: Int) : this.type = {
+//    require(i >= 0)
+//    _lc.wrapAfter(i)
+//    this
+//  }
   
   /** An XPos. Float, PCT or UV will be converted */
   def alignX(align: AlignX) : this.type = {
@@ -402,7 +402,7 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
    * or top-to-bottom. This value is not picked up from the container and is
    * top-to-bottom by default.
    */
-  def addBottomToTop(upFlag: Boolean) : this.type = {
+  def bottomToTop(upFlag: Boolean) : this.type = {
     if (upFlag) _lc.bottomToTop else _lc.topToBottom; 
     this 
   }
@@ -414,38 +414,32 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
    */
   def leftToRight(l: Boolean) : this.type = { _lc.leftToRight(l); this }
     
-  /**
-   * Get value set by debug(millis: Int)
-   */
-  def getDebug = _lc.getDebugMillis
-    
-  /**
-   * Turns on debug painting for the container. This will lead to an active 
-   * repaint every millis milliseconds. Default value is 1000 (once every
-   * second). 
-   */
-  def debug(millis: Int) : this.type = {
-    require(millis >= 0)
-    _lc.debug(millis)
-    this
-  }
-  def debug() : this.type = debug(1000)
+//  /**
+//   * Turns on debug painting for the container. This will lead to an active 
+//   * repaint every millis milliseconds. Default value is 1000 (once every
+//   * second). 
+//   */
+//  private[smig] def debug(millis: Int) : this.type = {
+//    require(millis >= 0)
+//    _lc.debug(millis)
+//    this
+//  }
   
   /**
    * Puts the layout in horizontal flow mode. This means that the next cell
    * is normally below and the next component will be put there instead of
    * to the right. Default is horizontal flow.
    */
-  def flowX : this.type = { _lc.flowX; this }
+//  def flowX : this.type = { _lc.flowX; this }
   
   /**
    * Puts the layout in vertical flow mode. This means that the next cell
    * is normally below and the next component will be put there instead of
    * to the right. Default is horizontal flow.
    */
-  def flowY : this.type = { _lc.flowY; this }
+  // def flowY : this.type = { _lc.flowY; this }
   
-  def isFlowX = _lc.isFlowX
+  // def isFlowX = _lc.isFlowX
     
   /** 
    * Claims all available space in the container for the columns and/or
@@ -886,17 +880,34 @@ object MigPanel {
    * Create a transparent {@code component} with huge maximum width.
    * Using it with fillX or fillY will make it take up space.
    * 
-   * Prefer addSpringX, et, unless you are sharing constraints
+   * Prefer addSpringX, etc, unless you are sharing constraints
    *
    * @return A normally transparent component.
    */
   def createSpring : Spring = new Spring()
+  def createSpringDebug(bg: Color) : Spring = new Spring().debug(bg)
 }
   
-/** A container preconfigured with a mig layout. You are so lucky. */
+/** 
+ * A container preconfigured with a mig layout. You are so lucky. 
+ *
+ * I decided the normal way of specifying position was slightly broken.
+ * I ripped the positioning methods out of CC and put them in the 
+ * MigPanel.  The position is determined as you add components and is  
+ * alwys added to the constraints as a cell.  There is an origin, originally
+ * defined as (0, 0).  There is a cursor "_pt" holding the current position.
+ * The "put" methods add a component at the cursor.  The "add" methods  do the 
+ * same but increment the cursor.  The "dock" methods have been added to the 
+ * MigPanel.
+ */
 class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC], 
                               colC: Option[ColC])
 extends Panel with LayoutContainer {
+  private var _flowX = true
+  private var _xFlowRight = true
+  private var _yFlowDown = true
+  private var _pt = Array(0, 0)
+  private var _origin = Array(0, 0)
   lazy val getLC : LC = lc match { 
     case None =>  LC() 
     case Some(lc) => lc 
@@ -919,13 +930,164 @@ extends Panel with LayoutContainer {
   def this(colC: ColC) = this(None, None, Some(colC))
   def this() = this(None, None, None)
   
-  /** Does the conventional debug, just allows calling it without defining
-   * an LC in the constructor.  (One gets created regardless) */    
-  def debug(millis: Int) : this.type = {
+  /** Install component using copy of constraint */
+  private def install(com: Component, con: CC) : CC = {
+    val cc = con.copy
+    peer.add(com.peer, cc.java)
+    cc
+  }
+  
+  /** Install component, creating constraint */
+  private def install(com: Component) : CC = {
+    val cc = new CC
+    peer.add(com.peer, cc.java)
+    cc
+  }
+    
+  /**
+   * This is an implementation of an  abstract method but we don't 
+   * really want to use it since it can't copy and return the CC.
+   * We need a copy because the cell is explicitly set on each component.
+   */
+  override protected[smig] def add(com: Component, con: CC) {
+    println("HHHHHHHHHHHHHHHHHEEEEEEEEEEEEEEEERRRRRRRRRRRRRRRRREEEEEEEEEEEEEE")
+    val cc = install(com, con)
+    cc.java.cell(_pt(0), _pt(1))
+    step
+  }
+  
+  def add(con: CC, com: Component) : CC = {
+    val cc = install(com, con)
+    cc.java.cell(_pt(0), _pt(1))
+    step
+    cc
+  }
+  
+  /**
+   * Adds and then steps to next cell.
+   * @param com Add this
+   * @return a freshly brewed CC for your modifying pleasure
+   */
+  def add(com: Component) : CC = {
+    val cc = put(com)
+    step
+    cc
+  }
+  
+  /**
+   * @param com Add this to current cell, don't step
+   * @return a fresh CC for your modifying pleasure
+   */
+  def put(com: Component) : CC = {
+    val cc = install(com)
+    cc.java.cell(_pt(0), _pt(1))
+    cc
+  }
+  
+  /**
+   * @param com Add this to current cell, don't step
+   * @param cc copy this and use it
+   * @return the constraint copy
+   */
+  def put(com: Component, cc: CC) : CC = {
+    cc.java.cell(_pt(0), _pt(1))
+    install(com, cc)
+  }
+  
+  def goto(x: Int, y: Int) : this.type = { _pt(0) = x; _pt(1) = y; this }
+  def gotoX(x: Int) : this.type = { _pt(0) = x; this }
+  def gotoY(y: Int) : this.type = { _pt(1) = y; this }
+  def getCell : (Int, Int) = (_pt(0), _pt(1))
+  
+  /** Set flow direction to X.  Or not. */
+  def flowX() : this.type = { _flowX = true; this }
+  def flowY() : this.type = { _flowX = false; this }
+  def isFlowX = _flowX
+  def xFlowRight(b: Boolean) : this.type = { _xFlowRight = b; this }
+  def isXFlowRight = _xFlowRight
+  def yFlowDown(b: Boolean) : this.type = { _yFlowDown = b; this }
+  def isYFlowDown = _yFlowDown
+  /** Sets and goes to origin */
+  def origin(x: Int, y: Int) : this.type = { 
+    _origin(0) = x; 
+    _origin(1) = y;
+    _pt(0) = x
+    _pt(1) = y
+    this 
+  }
+  def toOrigin : this.type = { 
+    _pt(0) = _origin(0)
+    _pt(1) = _origin(1)
+    this
+  }
+  
+  def getXStep = (if (_xFlowRight) 1 else -1)
+  def getYStep = (if (_yFlowDown) 1 else -1)
+  
+  /** increment 1 in flow direction */
+  def step : this.type = step(1)
+  
+  /** increment however many in flow direction */
+  def step(i: Int) : this.type = {
+    if (_flowX) {
+      _pt(0) += getXStep * i
+    } else {
+      _pt(1) += getYStep * i
+    }
+    this
+  }
+  
+  /** Set x to x of origin and step y in y flow direction */
+  def newRow : this.type = { 
+    _pt(0) = _origin(0)
+    _pt(1) += getYStep
+    this
+  }
+  
+  /** Set y to y of origin and step x in x flow direction */
+  def newCol : this.type = { 
+    _pt(0) += getXStep 
+    _pt(1) = _origin(1);
+    this
+  }
+  
+  /** 
+   * For a component to take up the whole side, unless something
+   * else is docked.  Operates beyond cells
+   * @return Fresh CC
+   */
+  def dock(dock: Dock.Value, comp: Component) : CC = {
+    val cc = install(comp)
+    val j = cc.java
+    dock match {
+      case Dock.North => j.dockNorth
+      case Dock.West => j.dockWest
+      case Dock.South => j.dockSouth
+      case Dock.East => j.dockEast
+      case _ =>
+    } 
+    cc
+  }
+  
+  def getDebugMillis = layoutManager.getLayoutConstraints().
+  asInstanceOf[net.miginfocom.layout.LC].getDebugMillis
+  
+  /** 
+   * Does the conventional debug, just allows calling it without defining
+   * an LC in the constructor.  (One gets created regardless) 
+   */    
+  def debug_=(millis: Int) : this.type = {
     layoutManager.getLayoutConstraints().
     asInstanceOf[net.miginfocom.layout.LC].debug(millis)
     this
   }
+  
+  /** 
+   * Does the conventional debug with default refresh, just allows calling 
+   * it without definingan LC in the constructor.  (One gets created 
+   * regardless)
+   */    
+  def debug : this.type = { debug = 1000; this }
   
   /**
    * Arrange for useful tool tips telling the constraints are set on the 
@@ -1111,25 +1273,6 @@ extends Panel with LayoutContainer {
      
   override protected def areValid(c: CC): (Boolean, String) = 
     (true, "Like we really checked")
-    
-  /**
-   * This could be useful if several components share constraints
-   * @param com Add this
-   * @param con A CC object
-   */
-  override protected def add(com: Component, con: CC) {
-    peer.add(com.peer, con._cc)
-  }
-  
-  /**
-   * @param com Add this
-   * @return a fresh CC for your modifying pleasure
-   */
-  protected def add(com: Component) : CC = {
-    val con = new CC
-    peer.add(com.peer, con._cc)
-    con
-  }
   
   def getColC : Option[ColC] = {
     val ac = 
@@ -1172,14 +1315,14 @@ extends Panel with LayoutContainer {
    * @param btns add these components, centered on row and with same width
    */
   def addBtnRow(row: Int, sameSize: Boolean, btns: Component*) {
-    require(getLC.isFlowX)
+    require(isFlowX)
     val spaceSizeGroup = MigPanel.getGroupName
     var btnSizeGroup: String = null
     if (sameSize) {
       btnSizeGroup = MigPanel.getGroupName
     }
     if (row >= 0) {
-      cc.cell(0, row)
+      goto(0, row)
     }
     val bs0 = BS.toBS(0)
     add(MigPanel.createSpring).spanX.split(btns.length * 2 + 3).
@@ -1192,41 +1335,42 @@ extends Panel with LayoutContainer {
       cb.sizeGroupX(btnSizeGroup)
     }
     btns.foreach(comp => {
-        add(MigPanel.createSpring, cs)
-        add(comp, cb)
+        add(cs, MigPanel.createSpring)
+        add(cb, comp)
       })
-    add(MigPanel.createSpring, cs)
-    add(MigPanel.createSpring, cs)
+    add(cs, MigPanel.createSpring)
+    add(cs, MigPanel.createSpring)
   }
   
   /** Invisible component that pushes in X */
   def addXSpring: CC = 
     add(MigPanel.createSpring).fillX.height(BS.toBS(0))
-  def addXSpringDebug: CC =
-    add(MigPanel.createSpring.debug).fillX.height(BS.toBS(Consts._NARROW))
+  def addXSpringDebug: CC = add(MigPanel.createSpringDebug(Color.red)).fillX.
+  height(BS.toBS(Consts._NARROW))
   /** Invisible component that pushes in Y */
   def addYSpring: CC = 
-     add(MigPanel.createSpring).fillY.width(BS.toBS(0))
-  def addYSpringDebug: CC =
-    add(MigPanel.createSpring.debug).fillY.width(BS.toBS(Consts._NARROW))
+    add(MigPanel.createSpring).fillY.width(BS.toBS(0))
+  def addYSpringDebug: CC = add(MigPanel.createSpringDebug(Color.red)).fillY.
+  width(BS.toBS(Consts._NARROW))
   /** Invisible component that pushes in X and Y */
   def addXYSpring: CC = add(MigPanel.createSpring).fillX.fillY 
-  def addXYSpringDebug: CC = add(MigPanel.createSpring.debug).fillX.fillY
+  def addXYSpringDebug: CC = add(MigPanel.createSpringDebug(Color.red)).fillX.
+  fillY
   /** Invisible component of given width */
   def addXStrut(len: Int): CC = 
     add(MigPanel.createSpring).width(BS.toBS(len)).height(BS.toBS(0))
-  def addXStrutDebug(len: Int): CC = 
-    add(MigPanel.createSpring.debug).width(BS.toBS(len)).height(BS.toBS(0))
+  def addXStrutDebug(len: Int): CC = add(MigPanel.createSpringDebug(
+      Color.green)).width(BS.toBS(len)).height(BS.toBS(Consts._NARROW))
   /** Invisible component of given height */
   def addYStrut(len: Int): CC = 
     add(MigPanel.createSpring).width(BS.toBS(0)).height(BS.toBS(len))
-  def addYStrutDebug(len: Int): CC = 
-    add(MigPanel.createSpring.debug).width(BS.toBS(0)).height(BS.toBS(len))
+  def addYStrutDebug(len: Int): CC = add(MigPanel.createSpringDebug(
+      Color.green)).width(BS.toBS(Consts._NARROW)).height(BS.toBS(len))
   /** Invisible component of given width, height */
   def addXYStrut(w: Int, h: Int): CC = 
     add(MigPanel.createSpring).width(BS.toBS(w)).height(BS.toBS(h))
-  def addXYStrutDebug(w: Int, h: Int): CC = 
-    add(MigPanel.createSpring.debug).width(BS.toBS(w)).height(BS.toBS(h))
+  def addXYStrutDebug(w: Int, h: Int): CC = add(MigPanel.createSpringDebug(
+      Color.green)).width(BS.toBS(w)).height(BS.toBS(h))
   
   /** If several components want to use the same constraints. */
   def cc = new CC()
@@ -1242,10 +1386,51 @@ extends Panel with LayoutContainer {
   
   type CC = Constraints // more natural for mig users
   
-  class Constraints private[smig] (cc: net.miginfocom.layout.CC) {
+  class Constraints private[smig] (cc: net.miginfocom.layout.CC) extends Cloneable {
     private[smig] var _cc = cc
     
     def this() = this(new net.miginfocom.layout.CC())
+    
+    private[smig] def copy : CC = {
+      val cc = new net.miginfocom.layout.CC
+      cc.setCellX(_cc.getCellX)
+      cc.setCellY(_cc.getCellY)
+      cc.setDockSide(_cc.getDockSide)
+      cc.setFlowX(_cc.getFlowX)
+      cc.setHideMode(_cc.getHideMode)
+      cc.setHorizontal(_cc.getHorizontal)
+      cc.setId(_cc.getId)
+      cc.setNewlineGapSize(_cc.getNewlineGapSize)
+      cc.setPadding(_cc.getPadding)
+      cc.setPos(_cc.getPos)
+      cc.setPushX(_cc.getPushX)
+      cc.setPushY(_cc.getPushY)
+      cc.setSkip(_cc.getSkip)
+      cc.setSpanX(_cc.getSpanX)
+      cc.setSpanY(_cc.getSpanY)
+      cc.setSplit(_cc.getSplit)
+      cc.setTag(_cc.getTag)
+      cc.setVertical(_cc.getVertical)
+      cc.setWrap(_cc.isWrap)
+      cc.setWrapGapSize(_cc.getWrapGapSize)
+      for (bool <- Array(true, false)) {
+        val oldDc = _cc.getDimConstraint(bool)
+        val newDc = cc.getDimConstraint(bool)
+        newDc.setAlign(oldDc.getAlign)
+        newDc.setEndGroup(oldDc.getEndGroup)
+        newDc.setFill(oldDc.isFill)
+        newDc.setGapAfter(oldDc.getGapAfter)
+        newDc.setGapBefore(oldDc.getGapBefore)
+        newDc.setGrow(oldDc.getGrow)
+        newDc.setGrowPriority(oldDc.getGrowPriority)
+        newDc.setNoGrid(oldDc.isNoGrid)
+        newDc.setShrink(oldDc.getShrink)
+        newDc.setShrinkPriority(oldDc.getShrinkPriority)
+        newDc.setSize(oldDc.getSize)
+        newDc.setSizeGroup(oldDc.getSizeGroup)
+      }
+      new CC(cc)
+    }
     
     def alignX(a: AlignX) : this.type = { _cc.alignX(a._a); this }
     
@@ -1264,36 +1449,21 @@ extends Panel with LayoutContainer {
      * @param y coord
      * @return this
      */
-    def cell(x: Int, y: Int) : this.type = { _cc.cell(x, y); this }
+//    def cell(x: Int, y: Int) : this.type = { _cc.cell(x, y); this }
     /**
      * @param x coord
      * @return this
      */
-    def cellX(x: Int) : this.type = { _cc.setCellX(x); this }
+//    def cellX(x: Int) : this.type = { _cc.setCellX(x); this }
     def getCellX : Int = _cc.getCellX
     
     /**
      * @param y coord
      * @return this
      */
-    def cellY(y: Int) : this.type = { _cc.setCellY(y); this }
+    //  def cellY(y: Int) : this.type = { _cc.setCellY(y); this }
     def getCellY : Int = _cc.getCellY
     
-    /** 
-     * For a component to take up the whole side, unless something
-     * else is docked.  Operates beyond cells
-     * @return this
-     */
-    def dock(dock: Dock.Value) : this.type = {
-      require(dock != null)
-      dock match {
-        case Dock.North => _cc.dockNorth
-        case Dock.West => _cc.dockWest
-        case Dock.South => _cc.dockSouth
-        case Dock.East => _cc.dockEast
-      } 
-      this
-    }
     def getDock : Dock.Value = Dock(_cc.getDockSide)
     
     /** 
@@ -1416,9 +1586,9 @@ extends Panel with LayoutContainer {
      * Go to next row/col before component.  The wrapped class allows adding
      * a gap at the same time but I say use the gap functions.
      */
-    def newline : this.type = { _cc.newline; this }
-    def nl = newline
-    def isNewline : Boolean = _cc.isNewline
+//    def newline : this.type = { _cc.newline; this }
+//    def nl = newline
+//    def isNewline : Boolean = _cc.isNewline
     
     def pad(top: UV, left: UV, bottom: UV, right: UV) : this.type = {
       _cc.setPadding(Array[UnitValue](top._value, left._value, 
@@ -1512,8 +1682,8 @@ extends Panel with LayoutContainer {
     def getSizeGroupY = _cc.getVertical.getSizeGroup
     
     /** Skip this many cells in flow direction before placing. */
-    def skip(i: Int) : this.type = { _cc.skip(i); this }
-    def getSkip = _cc.getSkip
+//    def skip(i: Int) : this.type = { _cc.skip(i); this }
+//    def getSkip = _cc.getSkip
     
     /**
      * Span completely in X direction
@@ -1570,8 +1740,8 @@ extends Panel with LayoutContainer {
      * Go to next row/col after component.  The wrapped class allows adding
      * a gap at the same time but I say use the gap functions.
      */
-    def wrap : this.type = { _cc.wrap; this }
-    def isWrap = _cc.isWrap
+//    def wrap : this.type = { _cc.wrap; this }
+//    def isWrap = _cc.isWrap
     
     /** The java peer */
     def java = _cc
@@ -1589,10 +1759,10 @@ class Spring private[smig] () extends Component {
   override lazy val peer: JComponent = new JLabel() with SuperMixin
       
   /** Add name, width, color */
-  private[smig] def debug: Spring = {
+  private[smig] def debug(bg: Color): Spring = {
     name = "Debugged Spring"
     opaque = true
-    background = new Color((Color.RED.getRGB() & (~0 >> 8)) | (0x80 << 24))
+    background = new Color((bg.getRGB() & (~0 >> 8)) | (0x80 << 24))
     this
   }
 }
