@@ -32,7 +32,7 @@ object MigDemo extends SimpleSwingApplication {
     title = "Baby App"
     contents = new MigPanel (
       // Create LC, set some params, note insets convert int to PX
-      LC().fillX.flowX.insets(2).debug(),
+      LC().fillX.insets(2),
       // Note we used derived classes of AC for a bit better checking
       RowC().grow(6.0F).align(Ytop).i(1).align(Ybottom),
       ColC().align(Xleft)
@@ -40,82 +40,59 @@ object MigDemo extends SimpleSwingApplication {
       // Add tool tips that show constraints
       debugTip
       // Add conventional debug even without LC in constructor
-      debug(500)
-      add(wrapDemo)
-      add(shrinkDemo).nl
-      add(growDemo).spanX.pushX.growX.nl
-      add(centeredDemo).spanX.pushX.growX.nl
-      add(gapDemo).spanX.pushX.growX.nl
-      add(buttonsDemo).spanX.pushX.growX.nl 
-      add(springDemo).height(130).fillX.nl
-      add(sizeGroupDemo).nl.wrap
-      add(new TBLbl("New Skater Account", "One") {             
-          font = font.deriveFont(BOLD)
-          background = green
-        }).cell(0, 0)
-      // Note that add method returns a CC for chaining
-      add(new Label("Other Account")).cell(1, 0)
-      add(eastPanel).dock(East)
-      add(new Label("west") {             
-          font = font.deriveFont(ITALIC).deriveFont(BOLD)
-          border = TitledBorder(BeveledBorder(Raised), "Six") 
-        }).dock(West)
-      add(fillPanels).dock(North)
-      add(randPanel).dock(South)     
-      add(new Label("<html>one<br>ton</html>") { 
-          border = TitledBorder(BeveledBorder(Raised), "Seven") 
-        }).cell(2,0).align(0, 0)
+      debug
+      dock(North, fillPanels)
+      put(wrapDemo); put(centeredDemo).fillX.fillY
+      newRow.put(shrinkDemo)
+      newRow.put(growDemo)
+      newRow.put(gapDemo).pushX.growX
+      newRow.put(buttonsDemo).spanX.fillX
+      newRow.put(springDemo).height(130).fillX
+      newRow.put(endGroupDemo); put(randPanel)
+      dock(East, eastPanel)
+      dock(West, new TBLbl("California?", "West"))
+      dock(South, sizeGroupDemo)   
     }
   }
   
   def eastPanel = new MigPanel (
-    LC().flowX.debug,
+    LC().bottomToTop(true),
     RowC().align(Ybottom),
     ColC().i(0).align(Xright).i(1).align(Xleft).fill
   ){
-    debugTip
-    border = TitledBorder(EtchedBorder(Raised), "Ten")
-    add(new Label("uh"){
-        border = TitledBorder(EtchedBorder(Lowered), "Eleven")
-      }).pad(4)
-    add(new Label("ok"){
-        border = TitledBorder(EtchedBorder(Lowered), "Twelve")
-      }).wrap
-    add(new Label("like"){
-        TitledBorder(LineBorder(CYAN, 4), "Thirteen")
-      })
-    add(new Label("sure"))
+    flowY.debugTip
+    border = TitledBorder(EtchedBorder(Raised), "Up")
+    "Uh, ok like I'm sure.".split(" ").foreach(str => {add(new BLbl(str))})
   }
   
-  def randPanel = new MigPanel (
-    LC().flowX.debug
-  ){
+  def randPanel = new MigPanel (){
     debugTip
-    border = TitledBorder(EtchedBorder(Lowered), "Fourteen")
-    for { i <- 0 to 8 } add(block).sizeGroupX("blockx").sizeGroupY("blocky")
-  }
+    border = titled("Random Gap Demo")
+    for { i <- 0 to 5 } add(block).sizeGroupX("blockx").sizeGroupY("blocky")
   
-  def block = new MigPanel(
-    LC().insets(PX(0))
-  ){
-    debugTip
-    def rand = new Random
-    border = TitledBorder(EtchedBorder(Raised), "Rand")
-    val top : Int = rand.nextInt(20)
-    val left : Int = rand.nextInt(20)
-    val bottom = 19 - top
-    val right = 19 - left
-    add(new Label("uh"){
-        border = TitledBorder(EtchedBorder(Lowered), "Uh!")
-      }).gapTop(top).gapLeft(left).
-    gapBottom(bottom).gapRight(right)
+    private def block = new MigPanel(
+      LC().insets(PX(0))
+    ){
+      debugTip
+      def rand = new Random
+      border = TitledBorder(EtchedBorder(Raised), "Rand")
+      val top : Int = rand.nextInt(20)
+      val left : Int = rand.nextInt(20)
+      val bottom = 19 - top
+      val right = 19 - left
+      add(new Label("uh"){
+          border = TitledBorder(EtchedBorder(Lowered), "Uh!")
+        }).gapTop(top).gapLeft(left).
+      gapBottom(bottom).gapRight(right)
+    }
   }
   
   def fillPanels = new MigPanel (
-    LC().flowY.gap(0, 0)
+    LC().gap(0, 0)
   ){
-    debugTip
+    flowY.debugTip
     border = titled("No fill or grow here")
+    // Note how add or put returns a CC for chaining
     add(fillPanel("just pushing").debugTip).pushX
     add(fillPanel("I'm growing only because he's pushing -- weird").debugTip).
     growX
@@ -123,10 +100,10 @@ object MigDemo extends SimpleSwingApplication {
   
   /** A row to fill. */
   def fillPanel(lbl: String) = new MigPanel (
-    LC().flowX.gap(1, 1),
+    LC().gap(1, 1),
     ColC().fill(2)
   ){
-    debugTip
+    flowX.debugTip
     border = titled(lbl)
     for (i <- 0 to 3) {
       val grow = (i % 2) == 0
@@ -137,7 +114,7 @@ object MigDemo extends SimpleSwingApplication {
                               (if (push) "-pu" else "-**"))
         font = Font.decode(MONOSPACED)
       }
-      val cc = add(label).cellX(i)
+      val cc = add(label)
       var strs = List[String]()
       if ((i % 2) == 0) {
         cc.growX
@@ -154,37 +131,34 @@ object MigDemo extends SimpleSwingApplication {
   def shrinkDemo = new MigPanel(
   ){
     border = titled("Shrink: priority-shrink")
-    add(new BLbl("1-100")).width(100).shrinkX(100).shrinkPrioX(1).cell(0, 0)
-    add(new BLbl("2-100")).width(100).shrinkX(100).shrinkPrioX(2).cell(0, 0)
-    add(new BLbl("1-20")).width(100).shrinkX(20).shrinkPrioX(1).cell(0, 0)
-    add(new BLbl("2-20")).width(100).shrinkX(20).shrinkPrioX(2).cell(0, 0)
+    put(new BLbl("1-100")).width(100).shrinkX(100).shrinkPrioX(1)
+    put(new BLbl("2-100")).width(100).shrinkX(100).shrinkPrioX(2)
+    put(new BLbl("1-20")).width(100).shrinkX(20).shrinkPrioX(1)
+    put(new BLbl("2-20")).width(100).shrinkX(20).shrinkPrioX(2)
   }
   
   def growDemo = new MigPanel(
   ){
     border = titled("Grow: priority-grow")
-    add(new BLbl("1-100")).width(100).maxWidth(200).
-    growX(100).growPrioX(1).cell(0, 0).pushX
-    add(new BLbl("2-100")).width(100).maxWidth(200).
-    growX(100).growPrioX(2).cell(0, 0)
-    add(new BLbl("1-20")).width(100).maxWidth(200).
-    growX(20).growPrioX(1).cell(0, 0)
-    add(new BLbl("2-20")).width(100).maxWidth(200).
-    growX(20).growPrioX(2).cell(0, 0)
+    put(new BLbl("1-100")).width(100).maxWidth(200).
+    growX(100).growPrioX(1).pushX
+    put(new BLbl("2-100")).width(100).maxWidth(200).
+    growX(100).growPrioX(2)
+    put(new BLbl("1-20")).width(100).maxWidth(200).
+    growX(20).growPrioX(1)
+    put(new BLbl("2-20")).width(100).maxWidth(200).
+    growX(20).growPrioX(2)
   }
   
-  def wrapDemo = new MigPanel(
-    LC().wrapAfter(4)
-  ){
-    require(getLC.getWrapAfter == 4)
+  def wrapDemo = new MigPanel(){
+    override def add(comp: Component) : CC = { 
+      val cc = super.add(comp)
+      if (getCell._1 == 4) newRow
+      cc
+    }
     border = titled("Wrap after 4")
-    add(new Label("Zero"))
-    add(new Label("One"))
-    add(new Label("Two"))
-    add(new Label("Three"))
-    add(new Label("Four"))
-    add(new Label("Five"))
-    add(new Label("Six"))
+    "Zero One Two Three Four Five Six Seven".split(" ").
+    foreach(str => {add(new Label(str))})
   }
   
   def centeredDemo = new MigPanel() {
@@ -194,6 +168,7 @@ object MigDemo extends SimpleSwingApplication {
   }
   
   def gapDemo = new MigPanel() {
+    debug
     border = titled("Gaps")
     val bs = BS(5, 10, UV.INF)
     val zero = BS(0, 0, 0)
@@ -219,7 +194,7 @@ object MigDemo extends SimpleSwingApplication {
   }
   
   def springDemo = new MigPanel() {
-    border = titled("Spring Demo")
+    border = titled("Spring/Strut Demo")
     debugTip
     val dim = new Dimension(20, 20)
     for (x <- 0 to 6) {
@@ -227,18 +202,40 @@ object MigDemo extends SimpleSwingApplication {
         val xOdd = x % 2 == 1
         val yOdd = y % 2 == 1
         (if (xOdd && yOdd) {
-            add(new Panel() { preferredSize = dim; background = blue }).cell(x, y)
+            goto(x, y)
+            add(new Panel() { preferredSize = dim; background = blue })
           } else if (xOdd) {
             if (x == 1) {
-              addYSpringDebug.cell(x, y)
+              if (y == 2) {
+                goto(x, y).addYStrutDebug(5)
+              } else {
+                goto(x, y).addYSpringDebug
+              }
             }
           } else if (yOdd) {
             if (y == 1) {
-              addXSpringDebug.cell(x, y)
+              if (x == 2) {
+                goto(x, y).addXStrutDebug(30)
+              } else {
+                goto(x, y).addXSpringDebug
+              }
             }
           })
       }
     }
+  }
+  
+  def endGroupDemo = new MigPanel(
+  ) {
+    border = titled("EndGroup: 'X' works, '?' not so much")
+    put(new BLbl("0"))
+    put(new BLbl("?")).endGroupX("one")
+    put(new BLbl("0"))
+    put(new BLbl("X")).endGroupX("two")
+    put(new BLbl("000000000000000000000000000000"))
+    goto(0, 1).put(new BLbl("?????")).endGroupX("one")
+    put(new BLbl("XX")).endGroupX("two")
+    goto(0, 2).add(new BLbl("XX")).endGroupX("two")
   }
   
   def buttonsDemo = new MigPanel() {
@@ -260,4 +257,3 @@ object MigDemo extends SimpleSwingApplication {
     border = titled(title)
   }
 }
-
