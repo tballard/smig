@@ -1,3 +1,6 @@
+First things first.  A smig is a kind of beard.  Sorta the goatee motif.
+Makes you look mighty sporty, similar to what this will do to your UI.
+
 This is a wrapper for the MigLayout java layout manager for use from Scala.
 Pretty much alpha and my first Scala project, but still not totally without
 merit, I think.  One objective was to strongly type the heck out of
