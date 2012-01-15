@@ -55,7 +55,7 @@ object MigDemo extends SimpleSwingApplication {
     }
   }
   
-  def eastPanel = new MigPanel (
+  private def eastPanel = new MigPanel (
     LC().bottomToTop(true),
     RowC().align(Ybottom),
     ColC().i(0).align(Xright).i(1).align(Xleft).fill
@@ -65,7 +65,7 @@ object MigDemo extends SimpleSwingApplication {
     "Uh, ok like I'm sure.".split(" ").foreach(str => {add(new BLbl(str))})
   }
   
-  def randPanel = new MigPanel (){
+  private def randPanel = new MigPanel (){
     debugTip
     border = titled("Random Gap Demo")
     for { i <- 0 to 5 } add(block).sizeGroupX("blockx").sizeGroupY("blocky")
@@ -87,7 +87,7 @@ object MigDemo extends SimpleSwingApplication {
     }
   }
   
-  def fillPanels = new MigPanel (
+  private def fillPanels = new MigPanel (
     LC().gap(0, 0)
   ){
     flowY.debugTip
@@ -99,7 +99,7 @@ object MigDemo extends SimpleSwingApplication {
   }
   
   /** A row to fill. */
-  def fillPanel(lbl: String) = new MigPanel (
+  private def fillPanel(lbl: String) = new MigPanel (
     LC().gap(1, 1),
     ColC().fill(2)
   ){
@@ -128,7 +128,7 @@ object MigDemo extends SimpleSwingApplication {
     }
   }
   
-  def shrinkDemo = new MigPanel(
+  private def shrinkDemo = new MigPanel(
   ){
     border = titled("Shrink: priority-shrink")
     put(new BLbl("1-100")).width(100).shrinkX(100).shrinkPrioX(1)
@@ -137,7 +137,7 @@ object MigDemo extends SimpleSwingApplication {
     put(new BLbl("2-20")).width(100).shrinkX(20).shrinkPrioX(2)
   }
   
-  def growDemo = new MigPanel(
+  private def growDemo = new MigPanel(
   ){
     border = titled("Grow: priority-grow")
     put(new BLbl("1-100")).width(100).maxWidth(200).
@@ -150,7 +150,7 @@ object MigDemo extends SimpleSwingApplication {
     growX(20).growPrioX(2)
   }
   
-  def wrapDemo = new MigPanel(){
+  private def wrapDemo = new MigPanel(){
     override def add(comp: Component) : CC = { 
       val cc = super.add(comp)
       if (getCell._1 == 4) newRow
@@ -161,13 +161,13 @@ object MigDemo extends SimpleSwingApplication {
     foreach(str => {add(new Label(str))})
   }
   
-  def centeredDemo = new MigPanel() {
+  private def centeredDemo = new MigPanel() {
     border = titled("Centering")
     add(new BLbl("Center me, baby") {
       }).alignX(CENTER).pushX
   }
   
-  def gapDemo = new MigPanel() {
+  private def gapDemo = new MigPanel() {
     debug
     border = titled("Gaps")
     val bs = BS(5, 10, UV.INF)
@@ -180,7 +180,7 @@ object MigDemo extends SimpleSwingApplication {
       }).gapLeft(zero).gapRight(zero).gapTop(zero).gapBottom(zero)
   }
 
-  def sizeGroupDemo = new MigPanel() {
+  private def sizeGroupDemo = new MigPanel() {
     border = titled("Even/Odd size groups")
     add(new BLbl("0")).sizeGroupX("even")
     add(new BLbl("1")).sizeGroupX("odd")
@@ -193,7 +193,7 @@ object MigDemo extends SimpleSwingApplication {
     add(new BLbl("100000")).sizeGroupX("even")
   }
   
-  def springDemo = new MigPanel() {
+  private def springDemo = new MigPanel() {
     border = titled("Spring/Strut Demo")
     debugTip
     val dim = new Dimension(20, 20)
@@ -225,7 +225,7 @@ object MigDemo extends SimpleSwingApplication {
     }
   }
   
-  def endGroupDemo = new MigPanel(
+  private def endGroupDemo = new MigPanel(
   ) {
     border = titled("EndGroup: 'X' works, '?' not so much")
     put(new BLbl("0"))
@@ -238,22 +238,22 @@ object MigDemo extends SimpleSwingApplication {
     goto(0, 2).add(new BLbl("XX")).endGroupX("two")
   }
   
-  def buttonsDemo = new MigPanel() {
+  private def buttonsDemo = new MigPanel() {
     border = titled("Button Demo")
     addBtnRow(true, new Button("Exit"), new Button("Bail"), new Button("Quit"))
   }
   
-  def titled(title: String) = { 
+  private def titled(title: String) = { 
     TitledBorder(bord, title)
   }
   
-  def bord = EtchedBorder(Lowered)
+  private def bord = EtchedBorder(Lowered)
   
-  class BLbl(text: String) extends Label(text) {
+  private class BLbl(text: String) extends Label(text) {
     border = bord
   }
   
-  class TBLbl(text: String, title: String) extends Label(text) {
+  private class TBLbl(text: String, title: String) extends Label(text) {
     border = titled(title)
   }
 }
