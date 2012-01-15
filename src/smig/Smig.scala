@@ -5,20 +5,13 @@
 package smig 
   
 import net.miginfocom.swing.MigLayout
-import net.miginfocom.layout.ComponentWrapper
-import net.miginfocom.layout.ConstraintParser
-import net.miginfocom.layout.LayoutCallback
-import net.miginfocom.layout.LayoutUtil
-import net.miginfocom.layout.UnitValue
-import java.awt.Color
-import java.awt.Dimension
-import java.awt.event.ContainerEvent
-import java.awt.event.ContainerListener
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.SwingUtilities
-import javax.swing.ToolTipManager
+import net.miginfocom.layout.{
+  ComponentWrapper, ConstraintParser, LayoutCallback, LayoutUtil, UnitValue
+}
+import java.awt.{ Color, Dimension }
+import java.awt.event.{ ContainerEvent, ContainerListener }
+import javax.swing.{ 
+  JComponent, JLabel, JPanel, SwingUtilities, ToolTipManager }
 import net.miginfocom.layout.BoundSize
 import scala.collection.JavaConversions._
 import scala.swing.{
@@ -32,7 +25,6 @@ import scala.swing.{
  * Makes you look mighty sporty, similar to what this will do to your UI.
  * 
  * This is a wrapper for the mig layout manager for use from Scala.
- * This was my first Scala project, so it probably has some lame points.
  * It was designed to make things more type-safe than the java version
  * because, although not personally a nazi, I prefer APIs that are.
  * 
@@ -49,6 +41,9 @@ import scala.swing.{
  * I generally stuck with chaining instead of properties since it seemed more
  * succinct and the style is much like java which may be familiar to mig users.
  * And easier to use from java.
+ * 
+ * I rethought, and I believe, improved the cell selection API.  The calls 
+ * you know and love may have been replaced by counterparts in MigPanel.
  * 
  * tom@geeksite.org
  */
@@ -91,6 +86,8 @@ object AlignY  {
   implicit def toAlignY(f: Float) = new AlignY(f.toString)
   implicit def toAlignY(p: PCT) = new AlignY(p._value.getValue + "%")
   implicit def toAlignY(uv: UV) = new AlignY(uv.toString)
+  implicit def toAlignY(uv : UnitValue) = 
+    new AlignY(uv.getValue + UV.typeString(uv.getUnit))
   
   lazy val ZERO = AlignY.toAlignY(PX(0))
   lazy val CENTER = AlignY.toAlignY(PCT(50))
@@ -342,11 +339,11 @@ object BS {
 /** 
  *   L       CCCC
  *   L      C
- *   L      C      ***********************************************************
+ *   L      C      *************************************************************
  *   L      C
  *   LLLLLL  CCCCC
  *   
- * Layout constraints */
+ * Layout constraints thin wrapper */
 class LC private[smig] (lc: net.miginfocom.layout.LC) {
   private val _lc = lc
   
@@ -576,7 +573,6 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
     add("left to right", _lc.getLeftToRight).
     add("fill x", _lc.isFillX).
     add("fill y", _lc.isFillY).
-    add("flow x", _lc.isFlowX).
     add("grid gap x", _lc.getGridGapX).
     add("grid gap y", _lc.getGridGapY).
     add("height", _lc.getHeight).
@@ -586,7 +582,6 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
     add("no cache", _lc.noCache).
     add("no grid", _lc.noGrid).
     add("visual padding", _lc.isVisualPadding).
-    add("wrap after", _lc.getWrapAfter).
     get
   }
 }
@@ -598,7 +593,7 @@ object LC {
 /** 
  *    AAA    CCCC
  *   A   A  C
- *   AAAAA  C      ***********************************************************
+ *   AAAAA  C      *************************************************************
  *   A   A  C
  *   A   A   CCCCC
  *
@@ -866,17 +861,18 @@ extends Panel with LayoutContainer {
   private var _yFlowDown = true
   private var _pt = Array(0, 0)
   private var _origin = Array(0, 0)
-  lazy val getLC : LC = lc match { 
-    case None =>  LC() 
+  private var _wrapAfter = 0;
+  private lazy val _lc : LC = lc match { 
     case Some(lc) => lc 
+    case None => LC()
   }
   override lazy val peer =
     new JPanel(new MigLayout(
-        getLC.java,
+        _lc.java,
         rowC match { case None => null; case Some(rowC) => rowC.java },
         colC match { case None => null; case Some(colC) => colC.java }
       )) with SuperMixin
-  private def layoutManager = peer.getLayout.asInstanceOf[MigLayout]
+  private def mig = peer.getLayout.asInstanceOf[MigLayout]
   
   def this(lc: LC, rowC: RowC, colC: ColC) = 
     this(Some(lc), Some(rowC), Some(colC))
@@ -988,19 +984,42 @@ extends Panel with LayoutContainer {
     this
   }
   /** Get the amount to step in the x */
-  private def getXStep = (if (_xFlowRight) 1 else -1)
+  def getXStep = (if (_xFlowRight) 1 else -1)
   /** Get the amount to step in the x */
-  private def getYStep = (if (_yFlowDown) 1 else -1)
+  def getYStep = (if (_yFlowDown) 1 else -1)
+  
+  /** If a step goes this far from origin in flow direction, increments
+  * secondary direction and seeks back to origin in flow direction.
+  */
+  def wrapAfter(i: Int) : this.type = {
+    require(i >= 0)
+    _wrapAfter = i
+    this
+  }
   
   /** increment 1 in flow direction */
   def step : this.type = step(1)
   
-  /** increment however many in flow direction */
+  /** increment however many in flow direction, wrapping if specified */
   def step(i: Int) : this.type = {
     if (_flowX) {
       _pt(0) += getXStep * i
+      if (_wrapAfter > 0) {
+         if (_xFlowRight) {
+            if (_pt(0) >= _origin(0) + _wrapAfter) newRow
+         } else {
+           if (_pt(0) <= _origin(0) - _wrapAfter) newRow
+         }
+      }
     } else {
       _pt(1) += getYStep * i
+      if (_wrapAfter > 0) {
+         if (_yFlowDown) {
+            if (_pt(1) >= _origin(1) + _wrapAfter) newCol
+         } else {
+           if (_pt(1) <= _origin(1) - _wrapAfter) newCol
+         }
+      }
     }
     this
   }
@@ -1038,25 +1057,23 @@ extends Panel with LayoutContainer {
   }
   
   /** Refresh interval */
-  def getDebugMillis = layoutManager.getLayoutConstraints().
-  asInstanceOf[net.miginfocom.layout.LC].getDebugMillis
+  def getDebugMillis = _lc.java.getDebugMillis
   
   /** 
    * Does the conventional debug, just allows calling it without defining
    * an LC in the constructor.  (One gets created regardless) 
    */    
-  def debug(millis: Int) : this.type = {
-    layoutManager.getLayoutConstraints().
-    asInstanceOf[net.miginfocom.layout.LC].debug(millis)
+  def debug(millis: Int) : this.type = { 
+    _lc.java.debug(millis)
     this
   }
   
   /** 
    * Does the conventional debug with default refresh, just allows calling 
-   * it without definingan LC in the constructor.  (One gets created 
+   * it without defining an LC in the constructor.  (One gets created 
    * regardless)
    */    
-  def debug : this.type = { debug(1000); this }
+  def debug : this.type = debug(1000)
   
   /**
    * Arrange for useful tool tips telling the constraints are set on the 
@@ -1066,12 +1083,7 @@ extends Panel with LayoutContainer {
   def debugTip: this.type = {
     ToolTipManager.sharedInstance().setDismissDelay(Int.MaxValue);
     val tip = new StringBuilder("<html>");
-    lc match { 
-      case Some(lc) => 
-        str(lc, tip)
-      case _ =>
-        tip.append("LC = null<br/>");
-    }
+    str(_lc, tip)
     rowC match {
       case Some(rowC) => 
         tip.append("RowC = <br/>")
@@ -1114,7 +1126,6 @@ extends Panel with LayoutContainer {
     row(tip, "WrapAfter", l.getWrapAfter)
     row(tip, "FillX", l.isFillX)
     row(tip, "FillY", l.isFillY)
-    row(tip, "FlowX", l.isFlowX)
     row(tip, "NoCache", l.isNoCache)
     row(tip, "NoGrid", l.isNoGrid)
     row(tip, "TopToBottom", l.isTopToBottom)
@@ -1142,26 +1153,21 @@ extends Panel with LayoutContainer {
   
   /** Debug tool tip stuff */
   private def setCompTips(comp: Component) {
-    val cc = layoutManager.getConstraintMap.get(comp.peer).
+    val cc = mig.getConstraintMap.get(comp.peer).
     asInstanceOf[net.miginfocom.layout.CC]
+    val dirs = Array(null, "North", "West", "South", "East")
     if (cc != null) {
       val tip = new StringBuilder("<html>CC = <br/>")
-      row(tip, "CellX", cc.getCellX)
-      row(tip, "CellY", cc.getCellY)
-      row(tip, "Dock", cc.getDockSide match { 
-          case 0 => "North"; case 1 => "West"; case 2 => "South"; 
-          case 3 => "East"; case _ => null })
+      row(tip, "Cell", new Dimension(cc.getCellX, cc.getCellY))
+      row(tip, "Dock", dirs(cc.getDockSide + 1))
       row(tip, "Pad", str(cc.getPadding))
       row(tip, "PushX", cc.getPushX)
       row(tip, "PushY", cc.getPushY)
       row(tip, "SpanX", cc.getSpanX)
       row(tip, "SpanY", cc.getSpanY)
-      row(tip, "Split", cc.getSplit)
       row(tip, "Tag", cc.getTag)
       row(tip, "External", cc.isExternal)
       row(tip, "FlowX", cc.getFlowX)
-      row(tip, "Newline", cc.isNewline)
-      row(tip, "Wrap", cc.isWrap)
       row(tip, "Name", comp.name)
       row(tip, "Size", comp.size)
       row(tip, "PreferredSize", comp.preferredSize)
@@ -1255,21 +1261,21 @@ extends Panel with LayoutContainer {
   /* @return Column constraints */
   def getColC : Option[ColC] = {
     val ac = 
-      layoutManager.getColumnConstraints.asInstanceOf[net.miginfocom.layout.AC]
+      mig.getColumnConstraints.asInstanceOf[net.miginfocom.layout.AC]
     if (ac == null) None else Some(new ColC(ac))
   }
   
   /* @return Row constraints */
   def getRowC : Option[RowC] = {
     val ac =  
-      layoutManager.getRowConstraints.asInstanceOf[net.miginfocom.layout.AC]
+      mig.getRowConstraints.asInstanceOf[net.miginfocom.layout.AC]
     if (ac == null) None else Some(new RowC(ac))
   }
   
   /** Pass 2 functions that will be used to create a LayoutCallback */
   def addLayoutCallback(getSize: (ComponentWrapper) => Array[BoundSize],
                         correctBounds: (ComponentWrapper) => Unit) {
-    layoutManager.addLayoutCallback(new LayoutCallback() {
+    mig.addLayoutCallback(new LayoutCallback() {
         override def getSize(comp: ComponentWrapper) : Array[BoundSize] =
           getSize(comp)
         override def correctBounds(comp: ComponentWrapper) : Unit =
@@ -1333,8 +1339,8 @@ extends Panel with LayoutContainer {
   width(BS.toBS(Consts._NARROW))
   /** Invisible component that pushes in X and Y */
   def addXYSpring: CC = add(MigPanel.createSpring).fillX.fillY 
-  def addXYSpringDebug: CC = add(MigPanel.createSpringDebug(Color.red)).fillX.
-  fillY
+  def addXYSpringDebug: CC = 
+    add(MigPanel.createSpringDebug(Color.red)).fillX.fillY
   /** Invisible component of given width */
   def addXStrut(len: Int): CC = 
     add(MigPanel.createSpring).width(BS.toBS(len)).height(BS.toBS(0))
