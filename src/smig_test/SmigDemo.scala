@@ -43,16 +43,24 @@ object MigDemo extends SimpleSwingApplication {
       debug
       dock(North, fillPanels)
       put(wrapDemo); put(centeredDemo).fillX.fillY
-      newRow.put(shrinkDemo)
-      newRow.put(growDemo)
-      newRow.put(gapDemo).pushX.growX
+      newRow.put(shrinkDemo).fillX; addXStrut(450)
+      newRow.put(growDemo).fillX
+      newRow.put(gapDemo).fillX
       newRow.put(buttonsDemo).spanX.fillX
       newRow.put(springDemo).height(130).fillX
       newRow.put(endGroupDemo); put(randPanel)
       dock(East, eastPanel)
-      dock(West, new TBLbl("California?", "West"))
+      dock(West, placementDemo)
       dock(South, sizeGroupDemo)   
     }
+  }
+  
+  private def placementDemo = new MigPanel () {
+    border = titled("West")
+    flowY.wrapAfter(6)
+    (1 to 9).foreach(num => { add(new BLbl(num.toString))})
+    origin(1, 10).yFlowDown(false).xFlowRight(false)
+    (1 to 9).foreach(num => { add(new BLbl(num.toString))})
   }
   
   private def eastPanel = new MigPanel (
@@ -60,9 +68,10 @@ object MigDemo extends SimpleSwingApplication {
     RowC().align(Ybottom),
     ColC().i(0).align(Xright).i(1).align(Xleft).fill
   ){
+    border = titled("Up")
     flowY.debugTip
-    border = TitledBorder(EtchedBorder(Raised), "Up")
-    "Uh, ok like I'm sure.".split(" ").foreach(str => {add(new BLbl(str))})
+    "Pour in from bottom? Uh, ok like I'm sure.".split(" ").
+    foreach(str => {add(new BLbl(str))})
   }
   
   private def randPanel = new MigPanel (){
@@ -75,14 +84,12 @@ object MigDemo extends SimpleSwingApplication {
     ){
       debugTip
       def rand = new Random
-      border = TitledBorder(EtchedBorder(Raised), "Rand")
+      border = titled("Rand")
       val top : Int = rand.nextInt(20)
       val left : Int = rand.nextInt(20)
       val bottom = 19 - top
       val right = 19 - left
-      add(new Label("uh"){
-          border = TitledBorder(EtchedBorder(Lowered), "Uh!")
-        }).gapTop(top).gapLeft(left).
+      add(new TBLbl("uh", "Uh!")).gapTop(top).gapLeft(left).
       gapBottom(bottom).gapRight(right)
     }
   }
@@ -108,10 +115,8 @@ object MigDemo extends SimpleSwingApplication {
     for (i <- 0 to 3) {
       val grow = (i % 2) == 0
       val push = i < 2
-      val label = new Label("Btn") {
-        border = TitledBorder(EtchedBorder(Lowered), 
-                              (if (grow) "gr" else "**") + 
-                              (if (push) "-pu" else "-**"))
+      val label = new TBLbl("Btn", (if (grow) "gr" else "**") + 
+                              (if (push) "-pu" else "-**")) {
         font = Font.decode(MONOSPACED)
       }
       val cc = add(label)
@@ -151,14 +156,10 @@ object MigDemo extends SimpleSwingApplication {
   }
   
   private def wrapDemo = new MigPanel(){
-    override def add(comp: Component) : CC = { 
-      val cc = super.add(comp)
-      if (getCell._1 == 4) newRow
-      cc
-    }
+    wrapAfter(4)
     border = titled("Wrap after 4")
     "Zero One Two Three Four Five Six Seven".split(" ").
-    foreach(str => {add(new Label(str))})
+    foreach(str => { add(new Label(str)) })
   }
   
   private def centeredDemo = new MigPanel() {
