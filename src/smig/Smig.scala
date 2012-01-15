@@ -48,6 +48,7 @@ import scala.swing.{
  * 
  * I generally stuck with chaining instead of properties since it seemed more
  * succinct and the style is much like java which may be familiar to mig users.
+ * And easier to use from java.
  * 
  * tom@geeksite.org
  */
@@ -348,22 +349,6 @@ object BS {
  * Layout constraints */
 class LC private[smig] (lc: net.miginfocom.layout.LC) {
   private val _lc = lc
-    
-  /**
-   * The grid will wrap to a new column/row after a certain number of columns 
-   * (for horizontal flow) or rows (for vertical flow).
-   */
-//  def getWrapAfter = _lc.getWrapAfter
-   
-  /** 
-   * Explicitly specify where to wrap.  I need to be convinced of the 
-   * value of wrap() before implementing it.
-   */
-//  def wrapAfter(i: Int) : this.type = {
-//    require(i >= 0)
-//    _lc.wrapAfter(i)
-//    this
-//  }
   
   /** An XPos. Float, PCT or UV will be converted */
   def alignX(align: AlignX) : this.type = {
@@ -413,33 +398,6 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
    * running. This constraint overrides that value.
    */
   def leftToRight(l: Boolean) : this.type = { _lc.leftToRight(l); this }
-    
-//  /**
-//   * Turns on debug painting for the container. This will lead to an active 
-//   * repaint every millis milliseconds. Default value is 1000 (once every
-//   * second). 
-//   */
-//  private[smig] def debug(millis: Int) : this.type = {
-//    require(millis >= 0)
-//    _lc.debug(millis)
-//    this
-//  }
-  
-  /**
-   * Puts the layout in horizontal flow mode. This means that the next cell
-   * is normally below and the next component will be put there instead of
-   * to the right. Default is horizontal flow.
-   */
-//  def flowX : this.type = { _lc.flowX; this }
-  
-  /**
-   * Puts the layout in vertical flow mode. This means that the next cell
-   * is normally below and the next component will be put there instead of
-   * to the right. Default is horizontal flow.
-   */
-  // def flowY : this.type = { _lc.flowY; this }
-  
-  // def isFlowX = _lc.isFlowX
     
   /** 
    * Claims all available space in the container for the columns and/or
@@ -949,8 +907,8 @@ extends Panel with LayoutContainer {
    * really want to use it since it can't copy and return the CC.
    * We need a copy because the cell is explicitly set on each component.
    */
+  @Deprecated
   override protected[smig] def add(com: Component, con: CC) {
-    println("HHHHHHHHHHHHHHHHHEEEEEEEEEEEEEEEERRRRRRRRRRRRRRRRREEEEEEEEEEEEEE")
     val cc = install(com, con)
     cc.java.cell(_pt(0), _pt(1))
     step
@@ -989,40 +947,50 @@ extends Panel with LayoutContainer {
    * @param cc copy this and use it
    * @return the constraint copy
    */
-  def put(com: Component, cc: CC) : CC = {
+  def put(cc: CC, com: Component) : CC = {
     cc.java.cell(_pt(0), _pt(1))
     install(com, cc)
   }
   
+  /** Set the grid pointer for the next insert */
   def goto(x: Int, y: Int) : this.type = { _pt(0) = x; _pt(1) = y; this }
+  /** Set the grid pointer for the next insert, changing only x. */
   def gotoX(x: Int) : this.type = { _pt(0) = x; this }
+  /** Set the grid pointer for the next insert, changing only y. */
   def gotoY(y: Int) : this.type = { _pt(1) = y; this }
+  /// @return the offsets of the current insert point */
   def getCell : (Int, Int) = (_pt(0), _pt(1))
   
-  /** Set flow direction to X.  Or not. */
+  /** Set flow direction to X. */
   def flowX() : this.type = { _flowX = true; this }
+  /** Set flow direction to Y. */
   def flowY() : this.type = { _flowX = false; this }
+  /** @return true if flow direction is x */
   def isFlowX = _flowX
+  /** @param b true if x flow direction should be to the right. */
   def xFlowRight(b: Boolean) : this.type = { _xFlowRight = b; this }
+  /** @return true if x flow direction is to right. */
   def isXFlowRight = _xFlowRight
+  /** @param b true if y flow direction should be to the right. */
   def yFlowDown(b: Boolean) : this.type = { _yFlowDown = b; this }
+  /** @return true if y flow direction is down. */
   def isYFlowDown = _yFlowDown
   /** Sets and goes to origin */
   def origin(x: Int, y: Int) : this.type = { 
     _origin(0) = x; 
     _origin(1) = y;
-    _pt(0) = x
-    _pt(1) = y
-    this 
+    toOrigin
   }
+  /** Set pointer to origin */
   def toOrigin : this.type = { 
     _pt(0) = _origin(0)
     _pt(1) = _origin(1)
     this
   }
-  
-  def getXStep = (if (_xFlowRight) 1 else -1)
-  def getYStep = (if (_yFlowDown) 1 else -1)
+  /** Get the amount to step in the x */
+  private def getXStep = (if (_xFlowRight) 1 else -1)
+  /** Get the amount to step in the x */
+  private def getYStep = (if (_yFlowDown) 1 else -1)
   
   /** increment 1 in flow direction */
   def step : this.type = step(1)
@@ -1053,7 +1021,7 @@ extends Panel with LayoutContainer {
   
   /** 
    * For a component to take up the whole side, unless something
-   * else is docked.  Operates beyond cells
+   * else is docked.  Operates independent of normal cell range
    * @return Fresh CC
    */
   def dock(dock: Dock.Value, comp: Component) : CC = {
@@ -1069,6 +1037,7 @@ extends Panel with LayoutContainer {
     cc
   }
   
+  /** Refresh interval */
   def getDebugMillis = layoutManager.getLayoutConstraints().
   asInstanceOf[net.miginfocom.layout.LC].getDebugMillis
   
@@ -1076,7 +1045,7 @@ extends Panel with LayoutContainer {
    * Does the conventional debug, just allows calling it without defining
    * an LC in the constructor.  (One gets created regardless) 
    */    
-  def debug_=(millis: Int) : this.type = {
+  def debug(millis: Int) : this.type = {
     layoutManager.getLayoutConstraints().
     asInstanceOf[net.miginfocom.layout.LC].debug(millis)
     this
@@ -1087,7 +1056,7 @@ extends Panel with LayoutContainer {
    * it without definingan LC in the constructor.  (One gets created 
    * regardless)
    */    
-  def debug : this.type = { debug = 1000; this }
+  def debug : this.type = { debug(1000); this }
   
   /**
    * Arrange for useful tool tips telling the constraints are set on the 
@@ -1125,6 +1094,7 @@ extends Panel with LayoutContainer {
     contents.foreach(setCompTips(_))
   }
   
+  /** Debug tool tip stuff */
   private def str(lc: LC, tip: StringBuilder) {
     val l = lc.java
     tip.append("LC<br/>")
@@ -1151,6 +1121,7 @@ extends Panel with LayoutContainer {
     row(tip, "VisualPadding", l.isVisualPadding)
   }
   
+  /** Debug tool tip stuff */
   private def str(ac: AC, tip: StringBuilder) {
     var i = 0
     ac.java.getConstaints.foreach(c => {
@@ -1169,6 +1140,7 @@ extends Panel with LayoutContainer {
       })
   }
   
+  /** Debug tool tip stuff */
   private def setCompTips(comp: Component) {
     val cc = layoutManager.getConstraintMap.get(comp.peer).
     asInstanceOf[net.miginfocom.layout.CC]
@@ -1203,6 +1175,7 @@ extends Panel with LayoutContainer {
     }
   }
   
+  /** Debug tool tip stuff */
   private class ContListener extends ContainerListener() {
     override def componentAdded(ev: ContainerEvent) = 
       SwingUtilities.invokeLater(new Runnable {
@@ -1217,6 +1190,7 @@ extends Panel with LayoutContainer {
     override def componentRemoved(ev: ContainerEvent) = { }
   }
   
+  /** Debug tool tip stuff */
   private def row(tip: StringBuilder, name: String, value: Any) {
     if (value != null) {
       if (value.isInstanceOf[Boolean]) {
@@ -1240,10 +1214,12 @@ extends Panel with LayoutContainer {
     }
   }
   
+  /** Tool tip printing */
   private def str(dim: Dimension) : String = {
     dim.width + " X " + dim.height
   }
   
+  /** Tool tip printing */
   private def str(pad: Array[UnitValue]) : String = {
     if (pad == null) null else {
       val sb = new StringBuilder("[");
@@ -1254,6 +1230,7 @@ extends Panel with LayoutContainer {
     }
   }
   
+  /** Tool tip printing */
   private def str(bs: BoundSize) : String = {
     if (bs == null) null else {
       val s = str(bs.getMin) + ":" + str(bs.getPreferred) + ":" +
@@ -1262,6 +1239,7 @@ extends Panel with LayoutContainer {
     }
   }
   
+  /** Tool tip printing */
   private def str(uv: UnitValue) : String = {
     if (uv == null) "n" else { 
       val str = uv.getConstraintString
@@ -1274,12 +1252,14 @@ extends Panel with LayoutContainer {
   override protected def areValid(c: CC): (Boolean, String) = 
     (true, "Like we really checked")
   
+  /* @return Column constraints */
   def getColC : Option[ColC] = {
     val ac = 
       layoutManager.getColumnConstraints.asInstanceOf[net.miginfocom.layout.AC]
     if (ac == null) None else Some(new ColC(ac))
   }
   
+  /* @return Row constraints */
   def getRowC : Option[RowC] = {
     val ac =  
       layoutManager.getRowConstraints.asInstanceOf[net.miginfocom.layout.AC]
@@ -1325,9 +1305,8 @@ extends Panel with LayoutContainer {
       goto(0, row)
     }
     val bs0 = BS.toBS(0)
-    add(MigPanel.createSpring).spanX.split(btns.length * 2 + 3).
-    flowX.sizeGroupX(spaceSizeGroup).gapLeft(bs0).gapRight(bs0).
-    gapTop(bs0).gapBottom(bs0).growX
+    put(MigPanel.createSpring).spanX.flowX.sizeGroupX(spaceSizeGroup).
+    gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).growX
     val cs = cc.sizeGroupX(spaceSizeGroup).
     gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).fillX
     val cb = cc.gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0)
@@ -1335,11 +1314,11 @@ extends Panel with LayoutContainer {
       cb.sizeGroupX(btnSizeGroup)
     }
     btns.foreach(comp => {
-        add(cs, MigPanel.createSpring)
-        add(cb, comp)
+        put(cs, MigPanel.createSpring)
+        put(cb, comp)
       })
-    add(cs, MigPanel.createSpring)
-    add(cs, MigPanel.createSpring)
+    put(cs, MigPanel.createSpring)
+    put(cs, MigPanel.createSpring)
   }
   
   /** Invisible component that pushes in X */
@@ -1391,6 +1370,7 @@ extends Panel with LayoutContainer {
     
     def this() = this(new net.miginfocom.layout.CC())
     
+    /** The java CC wasn't clonable */
     private[smig] def copy : CC = {
       val cc = new net.miginfocom.layout.CC
       cc.setCellX(_cc.getCellX)
@@ -1444,34 +1424,25 @@ extends Panel with LayoutContainer {
     def getAlignX : AlignX = AlignX.toAlignX(_cc.getHorizontal.getAlign) 
     def getAlignY : AlignY = AlignY.toAlignY(_cc.getVertical.getAlign) 
     
-    /**
-     * @param x coord
-     * @param y coord
-     * @return this
-     */
-//    def cell(x: Int, y: Int) : this.type = { _cc.cell(x, y); this }
-    /**
-     * @param x coord
-     * @return this
-     */
-//    def cellX(x: Int) : this.type = { _cc.setCellX(x); this }
+    /** @return x coord */
     def getCellX : Int = _cc.getCellX
     
-    /**
-     * @param y coord
-     * @return this
-     */
-    //  def cellY(y: Int) : this.type = { _cc.setCellY(y); this }
+    /** @return y coord */
     def getCellY : Int = _cc.getCellY
     
     def getDock : Dock.Value = Dock(_cc.getDockSide)
     
     /** 
-     * Specifies that the component should be put in the end group grp and
+     * Specifies that the component should be put in the X end group grp and
      * will thus share the same ending coordinate as them within the group. 
      * @return this
      */
     def endGroupX(grp: String) : this.type = { _cc.endGroupX(grp); this }
+    /** 
+     * Specifies that the component should be put in the Y end group grp and
+     * will thus share the same ending coordinate as them within the group. 
+     * @return this
+     */
     def endGroupY(grp: String) : this.type = { _cc.endGroupY(grp); this }
     def getEndGroupX = _cc.getHorizontal.getEndGroup
     def getEndGroupY = _cc.getVertical.getEndGroup
@@ -1484,17 +1455,16 @@ extends Panel with LayoutContainer {
      * the X direction.  It is shorthand for growX.pushX
      */
     def fillX : this.type = { _cc.growX; _cc.pushX; this }
-    def isFillX = _cc.getHorizontal.isFill
     
     /**
      * Convenience method for what is required to make something fill space in
      * the X direction.  It is shorthand for growX.pushX
      */
     def fillY : this.type = { _cc.growY; _cc.pushY; this }
-    def isFillY = _cc.getVertical.isFill
     
-    /** Flow direction within cell */
+    /** Flow in X direction within cell */
     def flowX : this.type = { _cc.setFlowX(true);  this }
+    /** Flow in Y direction within cell */
     def flowY : this.type = { _cc.setFlowX(false);  this }
     def isFlowX : Boolean = { 
       _cc.getFlowX match {
@@ -1523,8 +1493,9 @@ extends Panel with LayoutContainer {
       this
     }
     
-    /** X growth weight for when several items in cell, default 100F */
+    /** X growth weight for when several items in cell, sets to 100 */
     def growX : this.type = growX(100.0F)
+    /** X growth weight for when several items in cell*/
     def growX(g: Float) : this.type = {
       require(g >= 0.0F)
       _cc.growX(g)
@@ -1532,8 +1503,9 @@ extends Panel with LayoutContainer {
     }
     def getGrowX = _cc.getHorizontal.getGrow
     
-    /** Y growth weight for when several items in cell, default 100F */
+    /** Y growth weight for when several items in cell, sets to 100 */
     def growY : this.type = growY(100.0F)
+    /** Y growth weight for when several items in cell*/
     def growY(g: Float) : this.type = {
       require(g >= 0.0F)
       _cc.growY(g)
@@ -1541,21 +1513,20 @@ extends Panel with LayoutContainer {
     }
     def getGrowY = _cc.getVertical.getGrow
     
+    /** The X grow priority compared to other components in the same cell. */
     def growPrioX(i: Int) : this.type = {
       require(i >= 0)
       _cc.growPrioX(i)
       this
     }
-    def grpx(i: Int) = growPrioX(i)
     def getgrowPrioX = _cc.getHorizontal.getGrowPriority
     
-    /** The grow priority compared to other components in the same cell. */
+    /** The Y grow priority compared to other components in the same cell. */
     def growPrioY(i: Int) : this.type = {
       require(i >= 0)
       _cc.growPrioY(i)
       this
     }
-    def grpy(i: Int) = growPrioY(i)
     def getgrowPrioY = _cc.getHorizontal.getGrowPriority
     
     /** The minimum width for the component. The value will override any value 
@@ -1581,14 +1552,6 @@ extends Panel with LayoutContainer {
     /** The maximum height for the component. The value will override any value 
      that is set on the component itself. */
     def maxHeight(uv: UV) : this.type = { _cc.maxHeight(uv.toString); this }
-   
-    /** 
-     * Go to next row/col before component.  The wrapped class allows adding
-     * a gap at the same time but I say use the gap functions.
-     */
-//    def newline : this.type = { _cc.newline; this }
-//    def nl = newline
-//    def isNewline : Boolean = _cc.isNewline
     
     def pad(top: UV, left: UV, bottom: UV, right: UV) : this.type = {
       _cc.setPadding(Array[UnitValue](top._value, left._value, 
@@ -1681,10 +1644,6 @@ extends Panel with LayoutContainer {
     def getSizeGroupX = _cc.getHorizontal.getSizeGroup
     def getSizeGroupY = _cc.getVertical.getSizeGroup
     
-    /** Skip this many cells in flow direction before placing. */
-//    def skip(i: Int) : this.type = { _cc.skip(i); this }
-//    def getSkip = _cc.getSkip
-    
     /**
      * Span completely in X direction
      */
@@ -1707,26 +1666,6 @@ extends Panel with LayoutContainer {
     def spanY(h: Int) : this.type = { _cc.spanY(h); this }
     def getSpanY : Int = _cc.getSpanY
     
-    /** 
-     * Sets in how many parts the current cell (that this constraint's 
-     * component will be in) should be split in. If for instance it is split
-     * in two, the next component will also share the same cell. Note that the
-     * cell can also span a number of cells, which means that you can for
-     * instance span three cells and split that big cell for two components.
-     * Split can be set to a very high value to make all components in the
-     * same row/column share the same cell.
-     * 
-     * Note that only the first component will be checked for this property.
-     * 
-     * @param count The number of parts (i.e. component slots) the cell 
-     * should be divided into.
-     */
-    def split(count: Int) : this.type = { _cc.split(count); this }
-    /**
-     * @return this
-     */
-    def getSplit : Int = _cc.getSplit
-    
     def tag(t: String) : this.type  = { _cc.tag(t); this }
     /**
      * @return The tag string
@@ -1735,13 +1674,6 @@ extends Panel with LayoutContainer {
       val tag = _cc.getTag
       if (tag == null) None else Some(tag)
     }
-    
-    /** 
-     * Go to next row/col after component.  The wrapped class allows adding
-     * a gap at the same time but I say use the gap functions.
-     */
-//    def wrap : this.type = { _cc.wrap; this }
-//    def isWrap = _cc.isWrap
     
     /** The java peer */
     def java = _cc
