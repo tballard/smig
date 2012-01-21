@@ -1,17 +1,23 @@
-/*
- * srcbin
- */
+package smig
 
-package smig 
-  
 import net.miginfocom.swing.MigLayout
 import net.miginfocom.layout.{
-  ComponentWrapper, ConstraintParser, LayoutCallback, LayoutUtil, UnitValue
+  ComponentWrapper,
+  ConstraintParser,
+  LayoutCallback,
+  LayoutUtil,
+  UnitValue
 }
 import java.awt.{ Color, Dimension }
 import java.awt.event.{ ContainerEvent, ContainerListener }
-import javax.swing.{ 
-  JComponent, JLabel, JPanel, SwingUtilities, ToolTipManager }
+import javax.swing.{
+  JComponent,
+  JLabel,
+  JPanel,
+  SwingUtilities,
+  Timer,
+  ToolTipManager
+}
 import net.miginfocom.layout.BoundSize
 import scala.collection.JavaConversions._
 import scala.swing.{
@@ -19,45 +25,51 @@ import scala.swing.{
   LayoutContainer,
   Panel
 }
+import scala.collection.mutable.WeakHashMap
+import scala.collection.immutable.HashMap
+import java.awt.event.{ActionEvent, ActionListener }
 
 /**
  * First things first.  A smig is a kind of beard.  Sorta the goatee motif.
  * Makes you look mighty sporty, similar to what this will do to your UI.
- * 
+ *
  * This is a wrapper for the mig layout manager for use from Scala.
  * It was designed to make things more type-safe than the java version
  * because, although not personally a nazi, I prefer APIs that are.
- * 
+ *
  * Ready for production use?  Not exactly, but heck it's just one file.  Pitch
  * it in your project, patch it if it needs it and tell me about it.
- * 
+ *
  * It requires the mig jar file.  I was compiling against miglayout-4.0.jar.
  * Depending on the platform you need miglayout-4.0-swing.jar or similar.
- * 
- * I picked and chose features to a slight degree when there seemed to be 
+ *
+ * I picked and chose features to a slight degree when there seemed to be
  * duplicated capability that was confusing or poorly documented.  Feel free,
  * nay, obliged to educate me.
- * 
+ *
  * I generally stuck with chaining instead of properties since it seemed more
  * succinct and the style is much like java which may be familiar to mig users.
  * And easier to use from java.
- * 
- * I rethought, and I believe, improved the cell selection API.  The calls 
+ *
+ * I rethought, and I believe, improved the cell selection API.  The calls
  * you know and love may have been replaced by counterparts in MigPanel.
  * 
+ * The callbacks have been implemented in such a way as to allow submitting them
+ * individually, seeing as functions are objects and all.
+ *
  * tom@geeksite.org
  */
-  
+
 /** Specify 4 possible dock positions in component constraint */
 object Dock extends Enumeration {
   val North, West, South, East = Value
-  
-  private [smig] implicit def toString(dock: Dock.Value) = 
+
+  private[smig] implicit def toString(dock: Value) =
     dock.toString.toLowerCase
 }
 
 /** No constructor for you, but an XPos. Float, PCT, Int works */
-class AlignX private[smig](a: String) {
+class AlignX private[smig] (a: String) {
   private[smig] val _a = a
 }
 object AlignX {
@@ -66,9 +78,9 @@ object AlignX {
   implicit def toAlignX(f: Float) = new AlignX(f.toString)
   implicit def toAlignX(p: PCT) = new AlignX(p._value.getValue + "%")
   implicit def toAlignX(uv: UV) = new AlignX(uv.toString)
-  implicit def toAlignX(uv : UnitValue) = 
+  implicit def toAlignX(uv: UnitValue) =
     new AlignX(uv.getValue + UV.typeString(uv.getUnit))
-  
+
   lazy val ZERO = AlignX.toAlignX(PX(0))
   lazy val CENTER = AlignX.toAlignX(PCT(50))
   lazy val LEFT = AlignX.toAlignX(PCT(0))
@@ -77,18 +89,18 @@ object AlignX {
   lazy val TRAILING = AlignX.toAlignX(PCT(100))
 }
 
-class AlignY private[smig](a: String) {
+class AlignY private[smig] (a: String) {
   private[smig] val _a = a
 }
-object AlignY  {
+object AlignY {
   implicit def toAlignY(p: YPos.Value) =
     new AlignY(p.toString.substring(1))
   implicit def toAlignY(f: Float) = new AlignY(f.toString)
   implicit def toAlignY(p: PCT) = new AlignY(p._value.getValue + "%")
   implicit def toAlignY(uv: UV) = new AlignY(uv.toString)
-  implicit def toAlignY(uv : UnitValue) = 
+  implicit def toAlignY(uv: UnitValue) =
     new AlignY(uv.getValue + UV.typeString(uv.getUnit))
-  
+
   lazy val ZERO = AlignY.toAlignY(PX(0))
   lazy val CENTER = AlignY.toAlignY(PCT(50))
   lazy val TOP = AlignY.toAlignY(PCT(0))
@@ -96,9 +108,9 @@ object AlignY  {
   lazy val LEADING = AlignY.toAlignY(PCT(0))
   lazy val TRAILING = AlignY.toAlignY(PCT(100))
 }
-
-/** These are specialized X alignments. Substring(1) of the name is the
- * string MigLayout uses 
+/**
+ * These are specialized X alignments. Substring(1) of the name is the
+ * string MigLayout uses
  */
 object XPos extends Enumeration {
   type XPos = Value
@@ -110,35 +122,46 @@ object YPos extends Enumeration {
   type YPos = Value
   val Ytop, Ybottom, Ycenter, Yleading, Ytrailing, Ybaseline = Value
 }
-  
+
 object HideMode extends Enumeration {
   type HideMode = Value
-  val Visible, ZeroSquareGaps,  ZeroSquareNoGaps, NoCell = Value
+  val Visible, ZeroSquareGaps, ZeroSquareNoGaps, NoCell = Value
 }
-  
-/** 
- * Privately constructed base class for unit values.  Use the derived 
- * classes for strong typing.  Example: PX(2) 
+
+/**
+ *   U    U V   V
+ *   U    U V   V
+ *   U    U V   V ************************************************************
+ *   U    U  V V  
+ *    VVVV    V
+ *
+ * Implements the Mig UnitValue
+ *
+ *
+ * Privately constructed base class for unit values.  Use the derived
+ * classes for strong typing.  Example: PX(2)
  */
 class UV private[smig] (uv: UnitValue) {
-  protected[smig] var _value : UnitValue = uv
+  protected[smig] var _value: UnitValue = uv
   private[smig] def this() = this(null)
-    
-  override def toString : String = {
+
+  override def toString: String = {
     _value.getValue + UV.typeString(_value.getUnit)
   }
+
 }
+
 object UV {
   /** "Infinite" UV */
   lazy val INF = toUV(LayoutUtil.INF)
-  
-  implicit def toUV(f: Float) : UV = {
+
+  implicit def toUV(f: Float): UV = {
     PX(f)
   }
-  implicit def toUV(i: Int) : UV = {
+  implicit def toUV(i: Int): UV = {
     PX(i.floatValue)
   }
-  implicit private[smig] def toUV(unitValue: UnitValue) : UV = {
+  implicit def toUV(unitValue: UnitValue): UV = {
     if (unitValue == null) N else {
       val value: Float = unitValue.getValue
       val unit: Int = unitValue.getUnit
@@ -150,14 +173,16 @@ object UV {
         case UnitValue.PIXEL => PX(value)
         case UnitValue.SPX => SPX(value)
         case UnitValue.SPY => SPY(value)
-        case UnitValue.INCH => IN(value) 
+        case UnitValue.INCH => IN(value)
         case UnitValue.MM => MM(value)
         case UnitValue.CM => CM(value)
         case _ => new UV(unitValue)
       }
     }
   }
-  private[smig] def typeString(i: Int) : String = {
+  implicit def toUnitValue(uv: UV) = uv._value
+
+  private[smig] def typeString(i: Int): String = {
     i match {
       case UnitValue.PIXEL => "px"
       case UnitValue.LPX => "lpx"
@@ -181,7 +206,7 @@ object UV {
 }
 
 /** UV for align. strongly typed AL(25) becomes "25.0al" */
-final class AL private (f: Float) extends UV { 
+final class AL private (f: Float) extends UV {
   _value = new UnitValue(f, UnitValue.ALIGN, f + "al")
 }
 object AL {
@@ -205,7 +230,7 @@ object LPY {
 }
 
 /** UV for percent. strongly typed PCT(25) becomes "25.0%" */
-final class PCT private (percent: Float) extends UV { 
+final class PCT private (percent: Float) extends UV {
   _value = new UnitValue(percent, UnitValue.PERCENT, percent + "%")
 }
 object PCT {
@@ -215,27 +240,27 @@ object PCT {
 /** Specialize UV for pixels */
 final class PX private (f: Float) extends UV {
   _value = new UnitValue(f, UnitValue.PIXEL, f + "px")
-} 
-object PX {
-  def apply(f: Float) : PX = new PX(f)
 }
-  
+object PX {
+  def apply(f: Float): PX = new PX(f)
+}
+
 /** Specialize UV for, you know, Screen Percentatge */
 final class SPX private (f: Float) extends UV {
   _value = new UnitValue(f, UnitValue.SPX, f + "spx")
 }
 object SPX {
-  def apply(f: Float) : SPX = new SPX(f)
+  def apply(f: Float): SPX = new SPX(f)
 }
-  
+
 /** Specialize UV for, you know, Screen Percentatge */
 final class SPY private (f: Float) extends UV {
   _value = new UnitValue(f, UnitValue.SPY, f + "spy")
 }
 object SPY {
-  def apply(f: Float) : SPY = new SPY(f)
+  def apply(f: Float): SPY = new SPY(f)
 }
-  
+
 /** Extend UV for inputting inches */
 final class IN private (f: Float) extends UV {
   _value = new UnitValue(f, UnitValue.INCH, f + "in")
@@ -243,7 +268,7 @@ final class IN private (f: Float) extends UV {
 object IN {
   def apply(f: Float) = new IN(f)
 }
-  
+
 /** Extend UV for inputting millimeters */
 final class MM private (f: Float) extends UV {
   _value = new UnitValue(f, UnitValue.MM, f + "mm")
@@ -251,7 +276,7 @@ final class MM private (f: Float) extends UV {
 object MM {
   def apply(f: Float) = new MM(f)
 }
-  
+
 /** Extend UV for inputting centimeters */
 final class CM private (f: Float) extends UV {
   _value = new UnitValue(f, UnitValue.CM, f + "cm")
@@ -259,7 +284,7 @@ final class CM private (f: Float) extends UV {
 object CM {
   def apply(f: Float) = new CM(f)
 }
-  
+
 /** FS means freestyle.  Allow inputting any old crap without any checking. */
 final class FS private (s: String) extends UV {
   _value = ConstraintParser.parseUnitValue(s, true)
@@ -267,157 +292,164 @@ final class FS private (s: String) extends UV {
 object FS {
   def apply(s: String) = new FS(s)
 }
-  
+
 /** Extend UV for null field in BS */
-final object N extends UV { 
+final object N extends UV {
   _value = null
-  
+
   override def toString = "n"
 }
 
-/** 
+/**
  *   BBBBB   SSSS
  *   B    B S
  *   BBBBB   SSSS  ************************************************************
  *   B    B      S
  *   BBBBBB SSSSS
- *   
- * Implements the Mig BoundSize */
-class BS(_min : UV, _pref: UV, _max: UV) {
+ *
+ * Implements the Mig BoundSize
+ */
+class BS(_min: UV, _pref: UV, _max: UV) {
   private[this] var v_min: UV = if (_min == null) N else _min
   private[this] var v_pref: UV = if (_pref == null) N else _pref
   private[this] var v_max: UV = if (_max == null) N else _max
-  
-  /** All nulls */  
+
+  /** All nulls */
   def this() = this(N, N, N)
-    
+
   /** Contains preferred value only. */
   def this(pref: UV) = this(N, pref, N)
-    
+
   /** Contains minimum and preferred values only. */
   def this(min: UV, pref: UV) = this(min, pref, N)
-    
+
   def getMin = _min
   def getPref = _pref
   def getMax = _max
-    
-  def min(uv: UV) : this.type = { v_min = uv; this }
-  def pref(uv: UV) : this.type = { v_pref = uv; this }
-  def max(uv: UV) : this.type = { v_max = uv ; this }
-    
+
+  def min(uv: UV): this.type = { v_min = uv; this }
+  def pref(uv: UV): this.type = { v_pref = uv; this }
+  def max(uv: UV): this.type = { v_max = uv; this }
+
   /** @return The string that could be used in java */
-  override def toString() : String = {
+  override def toString(): String = {
     new StringBuilder().append(_min).append(':').append(_pref).
-    append(':').append(_max).toString
+      append(':').append(_max).toString
   }
 }
 
 /* Conversions, creation methods for Bound Size. */
 object BS {
-  def apply() : BS = new BS()
-  def apply(pref: UV) : BS = new BS(pref)
-  def apply(min: UV, pref: UV) : BS = new BS(min, pref)
-  def apply(min: UV, pref: UV, max: UV) : BS = new BS(min, pref, max)
-    
+  def apply(): BS = new BS()
+  def apply(pref: UV): BS = new BS(pref)
+  def apply(min: UV, pref: UV): BS = new BS(min, pref)
+  def apply(min: UV, pref: UV, max: UV): BS = new BS(min, pref, max)
+
   /** Convert an Int to a BS */
-  implicit def toBS(i: Int) : BS = {
+  implicit def toBS(i: Int): BS = {
     BS(UV.toUV(i))
   }
-    
+
   /** Convert a UV to a BS */
-  implicit def toBS(uv: UV) : BS = BS(uv)
-    
+  implicit def toBS(uv: UV): BS = BS(uv)
+  /** Convert a UnitValue to a BS */
+  implicit def toBS(unitValue: UnitValue): BS = toBS(UV.toUV(unitValue))
+
   /** Convert a java BoundSize to a scala BS */
-  implicit def toBS(boundSize: BoundSize) : BS = {
+  implicit def toBS(boundSize: BoundSize): BS = {
     BS(
       UV.toUV(boundSize.getMin),
       UV.toUV(boundSize.getPreferred),
       UV.toUV(boundSize.getMax))
   }
+
+  implicit def toBoundSize(bs: BS): BoundSize =
+    new BoundSize(bs.getMin._value, bs.getPref._value, bs.getMax._value, null)
 }
 
-/** 
+/**
  *   L       CCCC
  *   L      C
  *   L      C      *************************************************************
  *   L      C
  *   LLLLLL  CCCCC
- *   
- * Layout constraints thin wrapper */
+ *
+ * Layout constraints thin wrapper
+ */
 class LC private[smig] (lc: net.miginfocom.layout.LC) {
   private val _lc = lc
-  
+
   /** An XPos. Float, PCT or UV will be converted */
-  def alignX(align: AlignX) : this.type = {
+  def alignX(align: AlignX): this.type = {
     require(align != null)
     _lc.alignX(align._a)
     this
   }
-  
+
   /** A YPos. Float, PCT or UV will be converted */
-  def alignY(align: AlignY) : this.type = {
+  def alignY(align: AlignY): this.type = {
     require(align != null)
     _lc.alignY(align._a)
     this
   }
-    
-  def getAlignX : Option[AlignX] = {
+
+  def getAlignX: Option[AlignX] = {
     val unitValue = _lc.getAlignX
-    if (unitValue == null) None else 
+    if (unitValue == null) None else
       Some(AlignX.toAlignX(unitValue.getValue))
   }
-        
-  def getAlignY : Option[AlignY] = {
+
+  def getAlignY: Option[AlignY] = {
     val unitValue = _lc.getAlignY
     if (unitValue == null) None else
       Some(AlignY.toAlignY(unitValue.getValue))
   }
 
   /** Glory in the convenience. */
-  def align(ax: AlignX, ay: AlignY) : this.type = {
+  def align(ax: AlignX, ay: AlignY): this.type = {
     alignX(ax)
     alignY(ay)
   }
-  
-  /** 
+
+  /**
    * Specifies if the components should be added in the grid bottom-to-top
    * or top-to-bottom. This value is not picked up from the container and is
    * top-to-bottom by default.
    */
-  def bottomToTop(upFlag: Boolean) : this.type = {
-    if (upFlag) _lc.bottomToTop else _lc.topToBottom; 
-    this 
+  def bottomToTop(upFlag: Boolean): this.type = {
+    if (upFlag) _lc.bottomToTop else _lc.topToBottom;
+    this
   }
-  
-  /** 
+
+  /**
    * Overrides the container's ComponentOrientation property for this layout.
-   * Normally this value is dependant on the Locale that the application is
+   * Normally this value is dependent on the Locale that the application is
    * running. This constraint overrides that value.
    */
-  def leftToRight(l: Boolean) : this.type = { _lc.leftToRight(l); this }
-    
-  /** 
+  def leftToRight(l: Boolean): this.type = { _lc.leftToRight(l); this }
+
+  /**
    * Claims all available space in the container for the columns and/or
-   * rows. At least one component need to have a "grow" constaint for it to
+   * rows. At least one component need to have a "grow" constraint for it to
    * fill the container. The space will be divided equally, though honoring
-   * "growpriority". If no column/row has "grow" set the grow weight of
+   * "growPriority". If no column/row has "grow" set the grow weight of
    * the components in the rows/columns will migrate to that row/column.
    */
-  def fillX : this.type = { _lc.fillX; this }
+  def fillX: this.type = { _lc.fillX; this }
   def isFillX = _lc.isFillX
-  def fillY : this.type = { _lc.fillY; this }
+  def fillY: this.type = { _lc.fillY; this }
   def isFillY = _lc.isFillY
-  def fill : this.type = { fillX; fillY; this }
-    
-  def getHeight : BS = BS.toBS(_lc.getHeight)
-    
+  def fill: this.type = { fillX; fillY; this }
+
+  def getHeight: BS = BS.toBS(_lc.getHeight)
+
   /* 
    * The height for the container as a BS. The value will override any value
    * that is set on the container itself.
    */
-  def height(h: BS) : this.type = { _lc.height(h.toString); this }
-  
-  /** 
+  def height(h: BS): this.type = { _lc.height(h.toString); this }
+
+  /**
    * Specified the insets for the laid out container. The gaps before/after
    * the first/last column/row overrides these layout insets. This is the
    * same thing as setting an EmptyBorder on the container but without
@@ -429,76 +461,76 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
    * default for "panel".
    */
   def insets(top: Option[UV], left: Option[UV], bottom: Option[UV],
-             right: Option[UV]) : this.type = {
-    val oldInsets : Array[UnitValue] = _lc.getInsets
+    right: Option[UV]): this.type = {
+    val oldInsets: Array[UnitValue] = _lc.getInsets
     if (oldInsets == null) {
-      def str(uv: Option[UV]) : String = 
-      { uv match { case None => null; case Some(x) => x.toString } }
+      def str(uv: Option[UV]): String =
+        { uv match { case None => null; case Some(x) => x.toString } }
       _lc.insets(str(top), str(left), str(bottom), str(right))
     } else {
-      def better(o: UnitValue, uv: Option[UV]) : String =
-      { (uv match { case None => N; case _ => uv }).toString }
+      def better(o: UnitValue, uv: Option[UV]): String =
+        { (uv match { case None => N; case _ => uv }).toString }
       _lc.insets(better(oldInsets(0), top), better(oldInsets(1), left),
-                 better(oldInsets(2), bottom), better(oldInsets(3), right));
+        better(oldInsets(2), bottom), better(oldInsets(3), right));
     }
     this
   }
-  def insets(inset: UV) : this.type = {
-    val i : Option[UV] = Some(inset)
+  def insets(inset: UV): this.type = {
+    val i: Option[UV] = Some(inset)
     insets(i, i, i, i)
   }
   /** Use platform defaults for dialog */
-  def insetsForDialog() = 
+  def insetsForDialog() =
     _lc.setInsets(ConstraintParser.parseInsets("dialog", true));
   /** Use platform defaults for panel.  The default */
-  def insetsForPanel() = 
+  def insetsForPanel() =
     _lc.setInsets(ConstraintParser.parseInsets("platform", true));
-  
+
   /** @return (top, left, bottom, right) tuple of UV */
   def getInsets: (UV, UV, UV, UV) = {
     val a = _lc.getInsets
     if (a == null) (N, N, N, N) else
       (UV.toUV(a(0)), UV.toUV(a(1)), UV.toUV(a(2)), UV.toUV(a(3)))
   }
-    
-  /** 
-   * The minimum height for the container. The value will override any 
-   * value that is set on the container itself.
-   */
-  def minHeight(uv: UV) : this.type = { _lc.minHeight(uv.toString); this }
-    
-  /** 
-   * The maximum height for the container. The value will override any 
-   * value that is set on the container itself.
-   */
-  def maxHeight(h: UV) : this.type = { _lc.maxHeight(h.toString); this }
-    
-  def getWidth : BS = BS.toBS(_lc.getWidth)
-    
-  def width(w: BS) : this.type = { _lc.width(w.toString); this }
-    
-  /** 
-   * The minimum width for the container. The value will override any 
-   * value that is set on the container itself.
-   */
-  def minWidth(uv: UV) : this.type = { _lc.minWidth(uv.toString); this }
-    
-  /** 
-   * The maximum width for the container. The value will override any 
-   * value that is set on the container itself.
-   */
-  def maxWidth(uv: UV) : this.type = { _lc.maxWidth(uv.toString); this }
-  
+
   /**
-   * @param boundSize The default horizontal grid gap between columns.  
+   * The minimum height for the container. The value will override any
+   * value that is set on the container itself.
+   */
+  def minHeight(uv: UV): this.type = { _lc.minHeight(uv.toString); this }
+
+  /**
+   * The maximum height for the container. The value will override any
+   * value that is set on the container itself.
+   */
+  def maxHeight(h: UV): this.type = { _lc.maxHeight(h.toString); this }
+
+  def getWidth: BS = BS.toBS(_lc.getWidth)
+
+  def width(w: BS): this.type = { _lc.width(w.toString); this }
+
+  /**
+   * The minimum width for the container. The value will override any
+   * value that is set on the container itself.
+   */
+  def minWidth(uv: UV): this.type = { _lc.minWidth(uv.toString); this }
+
+  /**
+   * The maximum width for the container. The value will override any
+   * value that is set on the container itself.
+   */
+  def maxWidth(uv: UV): this.type = { _lc.maxWidth(uv.toString); this }
+
+  /**
+   * @param boundSize The default horizontal grid gap between columns.
    * Defaults to platform default.
    */
-  def gapX(boundSize: BS) : this.type = {
+  def gapX(boundSize: BS): this.type = {
     _lc.gridGapX(boundSize.toString)
     this
   }
   /** @return The default grid gap between columns in the grid. */
-  def getGapX : Option[BS] = {
+  def getGapX: Option[BS] = {
     val bs = _lc.getGridGapX
     if (bs == null) None else Some(BS.toBS(bs))
   }
@@ -507,244 +539,250 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
    * @param boundSize The default vertical grid gap between rows.
    * Defaults to platform default.
    */
-  def gapY(boundSize: BS) : this.type = { 
+  def gapY(boundSize: BS): this.type = {
     _lc.gridGapY(boundSize.toString)
     this
   }
   /** @return The default grid gap between rows in the grid. */
-  def getGapY : Option[BS] = {
+  def getGapY: Option[BS] = {
     val bs = _lc.getGridGapY
     if (bs == null) None else Some(BS.toBS(bs))
   }
-  
-  def gap(boundSizeX: BS, boundSizeY: BS) : this.type = {
+
+  def gap(boundSizeX: BS, boundSizeY: BS): this.type = {
     _lc.gridGap(boundSizeX.toString, boundSizeY.toString)
     this
   }
-  
+
   /**
    * The hide mode specified how the layout manager should handle a component
-   * that isn't visible. 
-   * 1. NoCell - Normal. Bounds will be calculated as if the component was 
+   * that isn't visible.
+   * 1. NoCell - Normal. Bounds will be calculated as if the component was
    * visible.
    * 2. Visible - If hidden the size will be 0, 0 but the gaps remain.
    * 3. ZeroSquareGaps - If hidden the size will be 0, 0 and gaps set to zero.
-   * 4. ZeroSquareNoGaps - If hidden the component will be disregarded 
+   * 4. ZeroSquareNoGaps - If hidden the component will be disregarded
    * completely and not take up a cell in the grid.
    */
   def hideMode(hideMode: HideMode.Value) = _lc.hideMode(hideMode.id)
   def getHideMode = HideMode(_lc.getHideMode)
-  
-  /** 
+
+  /**
    * Instructs the layout engine to not use caches. This should normally
    * only be needed if the "%" unit is used as it is a function of the
    * parent size. If you are experiencing revalidation problems you can try
    * to set this constraint.
    */
-  def noCache : this.type = { _lc.noCache; this }
+  def noCache: this.type = { _lc.noCache; this }
   def isNoCache = _lc.isNoCache
-    
+
   /**
    * If the whole layout should be non grid based. It is the same as setting
-   * the "nogrid" property on every row/column in the grid.
+   * the "noGrid" property on every row/column in the grid.
    */
-  def noGrid : this.type = { _lc.noGrid; this }
+  def noGrid: this.type = { _lc.noGrid; this }
   def isNoGrid = _lc.isNoGrid
-  
-  /** 
-   * Turns off padding of visual bounds (e.g. compensation for drop shadows) 
+
+  /**
+   * Turns off padding of visual bounds (e.g. compensation for drop shadows)
    * Defaults to true
    */
-  def visualPadding(pad: Boolean) : this.type = { 
+  def visualPadding(pad: Boolean): this.type = {
     _lc.setVisualPadding(pad);
-    this 
+    this
   }
   def isVisualPadding = _lc.isVisualPadding
-    
+
   /** The underlying java LC instance */
   def java = _lc
-    
+
   override def toString: String = {
     new Out("LC:").
-    add("align x", _lc.getAlignX).
-    add("align y", _lc.getAlignY).
-    add("debug", _lc.getDebugMillis).
-    add("top to bottom", _lc.isTopToBottom).
-    add("left to right", _lc.getLeftToRight).
-    add("fill x", _lc.isFillX).
-    add("fill y", _lc.isFillY).
-    add("grid gap x", _lc.getGridGapX).
-    add("grid gap y", _lc.getGridGapY).
-    add("height", _lc.getHeight).
-    add("width", _lc.getWidth).
-    add("hide mode", HideMode(_lc.getHideMode)).
-    add("insets", _lc.getInsets).
-    add("no cache", _lc.noCache).
-    add("no grid", _lc.noGrid).
-    add("visual padding", _lc.isVisualPadding).
-    get
+      add("align x", _lc.getAlignX).
+      add("align y", _lc.getAlignY).
+      add("debug", _lc.getDebugMillis).
+      add("top to bottom", _lc.isTopToBottom).
+      add("left to right", _lc.getLeftToRight).
+      add("fill x", _lc.isFillX).
+      add("fill y", _lc.isFillY).
+      add("grid gap x", _lc.getGridGapX).
+      add("grid gap y", _lc.getGridGapY).
+      add("height", _lc.getHeight).
+      add("width", _lc.getWidth).
+      add("hide mode", HideMode(_lc.getHideMode)).
+      add("insets", _lc.getInsets).
+      add("no cache", _lc.noCache).
+      add("no grid", _lc.noGrid).
+      add("visual padding", _lc.isVisualPadding).
+      get
   }
 }
 
 object LC {
-  def apply() : LC = new LC(new net.miginfocom.layout.LC())
+  def apply(): LC = new LC(new net.miginfocom.layout.LC())
 }
-  
-/** 
+
+/**
  *    AAA    CCCC
  *   A   A  C
  *   AAAAA  C      *************************************************************
  *   A   A  C
  *   A   A   CCCCC
  *
- * Column or row constraints.  Comments will pretend it is a column */
-abstract class AC protected[smig] (ac: net.miginfocom.layout.AC) { 
+ * Column or row constraints.  Comments will pretend it is a column
+ */
+abstract class AC protected[smig] (ac: net.miginfocom.layout.AC) {
   protected val _ac = ac
-  
+
   private[smig] def this() = this(new net.miginfocom.layout.AC())
-  
-  /** 
+
+  /**
    * For columns, the components in that column will default to a "growX"
-   * constraint (which can be overridden by the individual component 
+   * constraint (which can be overridden by the individual component
    * constraints). Note that this property does not affect the size for the
-   * row, but rather the sizes of the components in the row. 
+   * row, but rather the sizes of the components in the row.
    */
-  def fill : this.type = { _ac.fill; this }
-  def fill(indexes: Int*) : this.type = { _ac.fill(indexes: _*); this }
-    
+  def fill: this.type = { _ac.fill; this }
+  def fill(indexes: Int*): this.type = { _ac.fill(indexes: _*); this }
+
   /** Column width as a bound size */
-  def size(bs: BS) : this.type = { _ac.size(bs.toString); this }
-    
+  def size(bs: BS): this.type = { _ac.size(bs.toString); this }
+
   /** Several column widths as a bound size */
-  def size(bs: BS, indexes: Int*) : this.type = {
+  def size(bs: BS, indexes: Int*): this.type = {
     _ac.size(bs.toString, indexes: _*)
     this
   }
-    
-  /** 
-   *Specifies that the current row/column should be put in the size group 
+
+  /**
+   * Specifies that the current row/column should be put in the size group
    * and will thus share the same size constraints as the other components
    * in the group.
    * @param n Name of group
    */
-  def sizeGroup(n: String) : this.type = { _ac.sizeGroup(n); this }
-    
-  /** 
-   *Specifies that the given rows/columns should be put in the size group 
+  def sizeGroup(n: String): this.type = { _ac.sizeGroup(n); this }
+
+  /**
+   * Specifies that the given rows/columns should be put in the size group
    * and will thus share the same size constraints as the other components
    * in the group.
    * @param n Name of group
    */
-  def sizeGroup(n: String, indexes: Int*) : this.type = {
+  def sizeGroup(n: String, indexes: Int*): this.type = {
     _ac.sizeGroup(n, indexes: _*)
     this
   }
-  
-  def getSizeGroup(i: Int) : Option[String] = {
+
+  def getSizeGroup(i: Int): Option[String] = {
     val grp = _ac.getConstaints()(i).getSizeGroup
     if (grp == null) None else Some(grp)
   }
-  
+
   /** Moves to next column, setting gap */
-  def gap(bs: BS) : this.type = { _ac.gap(bs.toString); this }
-  
+  def gap(bs: BS): this.type = { _ac.gap(bs.toString); this }
+
   /** Sets gap after given indexes */
-  def gap(bs: BS, indexes: Int*) : this.type = {
-    _ac.gap(bs.toString, indexes: _*); this }
-    
-  /** Specifies the current row/column's grow weight within columns/rows 
-   with the same grow priority */
-  def grow(g: Float) : this.type = { _ac.grow(g); this }
-  def grow : this.type = grow(100.0F)
-  def grow(g: Float, indexes: Int*) : this.type = { 
+  def gap(bs: BS, indexes: Int*): this.type = {
+    _ac.gap(bs.toString, indexes: _*); this
+  }
+
+  /**
+   * Specifies the current row/column's grow weight within columns/rows
+   * with the same grow priority
+   */
+  def grow(g: Float): this.type = { _ac.grow(g); this }
+  def grow: this.type = grow(100.0F)
+  def grow(g: Float, indexes: Int*): this.type = {
     _ac.grow(g, indexes: _*)
     this
   }
-    
+
   /** Specifies the current row/column's shrink priority. */
-  def growPrio(prio: Int) : this.type = { _ac.growPrio(prio); this }
-  def growPrio(prio: Int, indexes: Int*) : this.type = {
+  def growPrio(prio: Int): this.type = { _ac.growPrio(prio); this }
+  def growPrio(prio: Int, indexes: Int*): this.type = {
     _ac.growPrio(prio, indexes: _*)
     this
   }
-  
-  /** Specifies the current row/column's shrink weight within columns/rows 
-   with the same shrink priority */
-  def shrink(g: Float) : this.type = { _ac.grow(g); this }
-  def shrink : this.type = grow(100.0F)
-  def shrink(g: Float, indexes: Int*) : this.type = { 
+
+  /**
+   * Specifies the current row/column's shrink weight within columns/rows
+   * with the same shrink priority
+   */
+  def shrink(g: Float): this.type = { _ac.grow(g); this }
+  def shrink: this.type = grow(100.0F)
+  def shrink(g: Float, indexes: Int*): this.type = {
     _ac.shrink(g, indexes: _*)
     this
   }
-    
+
   /** Specifies the indicated rows'/columns' shrink priority. */
-  def shrinkPrio(prio: Int) : this.type = { _ac.shrinkPrio(prio); this }
-  def shrinkPrio(prio: Int, indexes: Int*) : this.type = {
-    _ac.shrinkPrio(prio,  indexes: _*)
+  def shrinkPrio(prio: Int): this.type = { _ac.shrinkPrio(prio); this }
+  def shrinkPrio(prio: Int, indexes: Int*): this.type = {
+    _ac.shrinkPrio(prio, indexes: _*)
     this
   }
-    
+
   /** Put whole column will be layed out in one cell. */
-  def noGrid() : this.type = { _ac.noGrid; this }
-  def noGrid(indexes: Int*) : this.type = { _ac.noGrid(indexes: _*); this }
-    
-    
-  /** Set the index of the nect column to specify properties of, starts at
-   * 0 
+  def noGrid(): this.type = { _ac.noGrid; this }
+  def noGrid(indexes: Int*): this.type = { _ac.noGrid(indexes: _*); this }
+
+  /**
+   * Set the index of the nect column to specify properties of, starts at
+   * 0
    */
-  def index(i: Int) : this.type = {
+  def index(i: Int): this.type = {
     require(i >= 0)
     _ac.index(i)
     this
   }
   /** Alias for index */
-  def i(i: Int) : this.type = index(i)
-  
+  def i(i: Int): this.type = index(i)
+
   /** Total number of rows/columns */
-  def count(i: Int) : this.type = {
+  def count(i: Int): this.type = {
     require(i >= 0)
     _ac.count(i)
     this
   }
   def getCount = _ac.getCount
-    
+
   def java = _ac
-    
+
   override def toString: String = {
     val out = new Out("AC:")
     val constraints = _ac.getConstaints
     for (i <- 0 until constraints.length) {
       val c = constraints(i)
       out.
-      add("Cell", i).                            
-      add("align", c.getAlign).
-      add("end group", c.getEndGroup).
-      add("gap before", c.getGapAfter).
-      add("gap after", c.getGapBefore).
-      add("grow", c.getGrow).
-      add("grow prio", c.getGrowPriority).
-      add("shrink weight", c.getShrink).
-      add("shrink prio", c.getShrinkPriority).
-      add("size", c.getSize).
-      add("size group", c.getSizeGroup).
-      add("fill", c.isFill).
-      add("no grid", c.isNoGrid)
+        add("Cell", i).
+        add("align", c.getAlign).
+        add("end group", c.getEndGroup).
+        add("gap before", c.getGapAfter).
+        add("gap after", c.getGapBefore).
+        add("grow", c.getGrow).
+        add("grow prio", c.getGrowPriority).
+        add("shrink weight", c.getShrink).
+        add("shrink prio", c.getShrinkPriority).
+        add("size", c.getSize).
+        add("size group", c.getSizeGroup).
+        add("fill", c.isFill).
+        add("no grid", c.isNoGrid)
     }
-    out.get                       
+    out.get
   }
 }
-  
+
 /** Row constraint, create with RowC() */
 class RowC private[smig] (ac: net.miginfocom.layout.AC) extends AC {
   private[smig] def this() = this(new net.miginfocom.layout.AC())
-  
+
   /** Row's default alignment */
-  def align(align: YPos.Value) : this.type = {
+  def align(align: YPos.Value): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1))
     this
   }
-  def align(align: YPos.Value, indexes: Int*) : this.type = {
+  def align(align: YPos.Value, indexes: Int*): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1), indexes: _*)
     this
@@ -752,20 +790,20 @@ class RowC private[smig] (ac: net.miginfocom.layout.AC) extends AC {
 }
 
 object RowC {
-  def apply() : RowC = new RowC()
+  def apply(): RowC = new RowC()
 }
-  
-/** Col constraint, create with ColC() */
+
+/** Column constraint, create with ColC() */
 class ColC private[smig] (ac: net.miginfocom.layout.AC) extends AC {
   private[smig] def this() = this(new net.miginfocom.layout.AC())
-  
+
   /** Column's default alignment */
-  def align(align: XPos.Value) : this.type = {
+  def align(align: XPos.Value): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1))
     this
   }
-  def align(align: XPos.Value, indexes: Int*) : this.type = {
+  def align(align: XPos.Value, indexes: Int*): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1), indexes: _*)
     this
@@ -773,38 +811,38 @@ class ColC private[smig] (ac: net.miginfocom.layout.AC) extends AC {
 }
 
 object ColC {
-  def apply() : ColC = new ColC()
+  def apply(): ColC = new ColC()
 }
-    
+
 /** Utility for printing */
 private[smig] class Out(s: String) {
   private val _nl = System.getProperty("line.separator")
   private val _sb = new StringBuilder(s).append(_nl)
-  private def add(field: String, enum: Enumeration) : this.type = 
+  private def add(field: String, enum: Enumeration): this.type =
     add(field, enum.toString.toLowerCase)
-    
-  private[smig] def add(field: String, value: Any) : this.type = {
+
+  private[smig] def add(field: String, value: Any): this.type = {
     if (value != null) {
       _sb.append("  ").append(field).append(" = ").append(value).append(_nl)
     }
     this
   }
-    
-  private[smig] def add(field: String, value: BoundSize) : this.type = {
+
+  private[smig] def add(field: String, value: BoundSize): this.type = {
     if (value != null) {
       add(field, BS.toBS(value))
     }
     this
   }
-    
-  private[smig] def add(field: String, value: UnitValue) : this.type = {
+
+  private[smig] def add(field: String, value: UnitValue): this.type = {
     if (value != null) {
       add(field, UV.toUV(value))
     }
     this
   }
-    
-  private[smig] def add(field: String, values: Array[UnitValue]) : this.type = {
+
+  private[smig] def add(field: String, values: Array[UnitValue]): this.type = {
     if (values != null) {
       _sb.append("  ").append(field).append(" = [")
       values.map(UV.toUV(_).toString).addString(_sb, ", ")
@@ -812,69 +850,153 @@ private[smig] class Out(s: String) {
     }
     this
   }
-    
+
   def get = _sb.toString
 }
-  
+
+/** 
+ * If any callback is added for a component we maintain one of these in a map for
+ * it. It holds any of the 3 methods that may be registered.
+ */
+private[smig] class MigCallback(comp: Component) {
+  def component = comp
+  /**
+   * @return a [x, y, x2, y2] position similar to the "pos" in the component
+   * constraint. If defined, any non-null ones override the ones specified on the CC.
+   */
+  var position: (Component) => Option[(UV, UV, UV, UV)] = _
+  /** @return a size similar to the "width" and "height" in the component constraint. */
+  var size: (Component) => Option[(BS, BS)] = _
+  /**
+   * A last minute change of the bounds. The bound for the layout cycle has been
+   * set and you can correct there using any set of rules you like.
+   * @param screenBounds these are the bounds that will be used if we return null
+   * @return bounds to actually use
+   */
+  var correctBounds: (Component) => Option[(Int, Int, Int, Int)] = _
+
+  private[smig] def getPosition: Array[UnitValue] =
+    if (position == null) null else
+      position(comp) match {
+        case Some((uv1, uv2, uv3, uv4)) => Array(UV.toUnitValue(uv1),
+          UV.toUnitValue(uv2), UV.toUnitValue(uv3), UV.toUnitValue(uv4))
+        case None => null
+      }
+
+  private[smig] def getSize: Array[BoundSize] =
+    if (size == null) null else
+      size(comp) match {
+        case Some((bs1, bs2)) => Array(BS.toBoundSize(bs1), BS.toBoundSize(bs2))
+        case None => null
+      }
+
+  private[smig] def getCorrectBounds: (Int, Int, Int, Int) =
+    if (correctBounds == null) null else {
+      correctBounds(comp) match {
+        case Some(t: (Int, Int, Int, Int)) => t
+        case _ => null
+      }
+    }
+}
+
+private object SmigLayoutCallback extends LayoutCallback {
+  private def migLayout(compWrapper: ComponentWrapper) = {
+    val peer = compWrapper.getComponent.asInstanceOf[JComponent];
+    MigPanel._callbacksByPeer.get(peer)
+  }
+
+  override def getPosition(compWrapper: ComponentWrapper): Array[UnitValue] = 
+    migLayout(compWrapper) match {
+      case Some(callback) => callback.getPosition
+      case _ => null
+    }
+
+  override def getSize(compWrapper: ComponentWrapper): Array[BoundSize] = 
+    migLayout(compWrapper) match {
+      case Some(callback) => callback.getSize
+      case _ => null
+    }
+
+  override def correctBounds(compWrapper: ComponentWrapper) {
+    val callback = migLayout(compWrapper)
+    callback match {
+      case Some(callback) =>
+        callback.getCorrectBounds match {
+          case (i1, i2, i3, i4) => callback.component.peer.setBounds(i1, i2, i3, i4)
+          case _ =>
+        }
+      case _ =>
+    }
+  }
+}
+
 object MigPanel {
   private var _groupNum: Int = 0;
-  
-  /** Assume done in awt dispatch thread */
-  private def getGroupName : String = 
+
+  /** Allow recovering Components based on the peer when doing callback */
+  private[smig] lazy val _callbacksByPeer = new WeakHashMap[JComponent, MigCallback]
+
+  /**
+   * May be used to generate unique group names.
+   * Assume done in awt dispatch thread
+   */
+  def getGroupName: String =
     "MigUtilBtnGroup_" + (_groupNum += 1);
-  
-  /* MigLayout does not define constants for the hidemode parameters. */
+
+  /* MigLayout does not define constants for the hide mode parameters. */
   val HIDEMODE_NORMAL_SIZE = 0;
   val HIDEMODE_ZERO_SIZE = 1;
   val HIDEMODE_ZERO_SIZE_NO_GAP = 2;
   val HIDEMODE_NO_PARTICIPATION = 3;
-  
+
   /**
    * Create a transparent {@code component} with huge maximum width.
    * Using it with fillX or fillY will make it take up space.
-   * 
+   *
    * Prefer addSpringX, etc, unless you are sharing constraints
    *
    * @return A normally transparent component.
    */
-  def createSpring : Spring = new Spring()
-  def createSpringDebug(bg: Color) : Spring = new Spring().debug(bg)
+  def createSpring: Spring = new Spring()
+  /** createSpring, only make visible */
+  def createSpringDebug(bg: Color): Spring = new Spring().debug(bg)
 }
-  
-/** 
- * A container preconfigured with a mig layout. You are so lucky. 
+
+/**
+ * A container configured with a MigLayout. You are so lucky.
  *
  * I decided the normal way of specifying position was slightly broken.
- * I ripped the positioning methods out of CC and put them in the 
- * MigPanel.  The position is determined as you add components and is  
- * alwys added to the constraints as a cell.  There is an origin, originally
+ * I ripped the positioning methods out of CC and put them in the
+ * MigPanel.  The position is determined as you add components and is
+ * always added to the constraints as a cell.  There is an origin, originally
  * defined as (0, 0).  There is a cursor "_pt" holding the current position.
- * The "put" methods add a component at the cursor.  The "add" methods  do the 
- * same but increment the cursor.  The "dock" methods have been added to the 
+ * The "put" methods add a component at the cursor.  The "add" methods  do the
+ * same but increment the cursor.  The "dock" methods have been added to the
  * MigPanel.
  */
-class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC], 
-                              colC: Option[ColC])
-extends Panel with LayoutContainer {
+class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
+  colC: Option[ColC])
+  extends Panel with LayoutContainer {
   private var _flowX = true
   private var _xFlowRight = true
   private var _yFlowDown = true
   private var _pt = Array(0, 0)
   private var _origin = Array(0, 0)
   private var _wrapAfter = 0;
-  private lazy val _lc : LC = lc match { 
-    case Some(lc) => lc 
+  private var _hasCallbacks = false
+  private lazy val _lc: LC = lc match {
+    case Some(lc) => lc
     case None => LC()
   }
   override lazy val peer =
     new JPanel(new MigLayout(
-        _lc.java,
-        rowC match { case None => null; case Some(rowC) => rowC.java },
-        colC match { case None => null; case Some(colC) => colC.java }
-      )) with SuperMixin
+      _lc.java,
+      rowC match { case None => null; case Some(rowC) => rowC.java },
+      colC match { case None => null; case Some(colC) => colC.java })) with SuperMixin
   private def mig = peer.getLayout.asInstanceOf[MigLayout]
-  
-  def this(lc: LC, rowC: RowC, colC: ColC) = 
+
+  /** Basically you can just leave out any null args */
+  def this(lc: LC, rowC: RowC, colC: ColC) =
     this(Some(lc), Some(rowC), Some(colC))
   def this(lc: LC, rowC: RowC) = this(Some(lc), Some(rowC), None)
   def this(lc: LC, colC: ColC) = this(Some(lc), None, Some(colC))
@@ -883,23 +1005,23 @@ extends Panel with LayoutContainer {
   def this(rowC: RowC) = this(None, Some(rowC), None)
   def this(colC: ColC) = this(None, None, Some(colC))
   def this() = this(None, None, None)
-  
+
   /** Install component using copy of constraint */
-  private def install(com: Component, con: CC) : CC = {
+  private def install(com: Component, con: CC): CC = {
     val cc = con.copy
     peer.add(com.peer, cc.java)
     cc
   }
-  
+
   /** Install component, creating constraint */
-  private def install(com: Component) : CC = {
+  private def install(com: Component): CC = {
     val cc = new CC
     peer.add(com.peer, cc.java)
     cc
   }
-    
+
   /**
-   * This is an implementation of an  abstract method but we don't 
+   * This is an implementation of an  abstract method but we don't
    * really want to use it since it can't copy and return the CC.
    * We need a copy because the cell is explicitly set on each component.
    */
@@ -909,76 +1031,76 @@ extends Panel with LayoutContainer {
     cc.java.cell(_pt(0), _pt(1))
     step
   }
-  
-  def add(con: CC, com: Component) : CC = {
+
+  def add(con: CC, com: Component): CC = {
     val cc = install(com, con)
     cc.java.cell(_pt(0), _pt(1))
     step
     cc
   }
-  
+
   /**
    * Adds and then steps to next cell.
    * @param com Add this
    * @return a freshly brewed CC for your modifying pleasure
    */
-  def add(com: Component) : CC = {
+  def add(com: Component): CC = {
     val cc = put(com)
     step
     cc
   }
-  
+
   /**
    * @param com Add this to current cell, don't step
    * @return a fresh CC for your modifying pleasure
    */
-  def put(com: Component) : CC = {
+  def put(com: Component): CC = {
     val cc = install(com)
     cc.java.cell(_pt(0), _pt(1))
     cc
   }
-  
+
   /**
    * @param com Add this to current cell, don't step
    * @param cc copy this and use it
    * @return the constraint copy
    */
-  def put(cc: CC, com: Component) : CC = {
+  def put(cc: CC, com: Component): CC = {
     cc.java.cell(_pt(0), _pt(1))
     install(com, cc)
   }
-  
+
   /** Set the grid pointer for the next insert */
-  def goto(x: Int, y: Int) : this.type = { _pt(0) = x; _pt(1) = y; this }
+  def goto(x: Int, y: Int): this.type = { _pt(0) = x; _pt(1) = y; this }
   /** Set the grid pointer for the next insert, changing only x. */
-  def gotoX(x: Int) : this.type = { _pt(0) = x; this }
+  def gotoX(x: Int): this.type = { _pt(0) = x; this }
   /** Set the grid pointer for the next insert, changing only y. */
-  def gotoY(y: Int) : this.type = { _pt(1) = y; this }
+  def gotoY(y: Int): this.type = { _pt(1) = y; this }
   /// @return the offsets of the current insert point */
-  def getCell : (Int, Int) = (_pt(0), _pt(1))
-  
+  def getCell: (Int, Int) = (_pt(0), _pt(1))
+
   /** Set flow direction to X. */
-  def flowX() : this.type = { _flowX = true; this }
+  def flowX(): this.type = { _flowX = true; this }
   /** Set flow direction to Y. */
-  def flowY() : this.type = { _flowX = false; this }
+  def flowY(): this.type = { _flowX = false; this }
   /** @return true if flow direction is x */
   def isFlowX = _flowX
   /** @param b true if x flow direction should be to the right. */
-  def xFlowRight(b: Boolean) : this.type = { _xFlowRight = b; this }
+  def xFlowRight(b: Boolean): this.type = { _xFlowRight = b; this }
   /** @return true if x flow direction is to right. */
   def isXFlowRight = _xFlowRight
   /** @param b true if y flow direction should be to the right. */
-  def yFlowDown(b: Boolean) : this.type = { _yFlowDown = b; this }
+  def yFlowDown(b: Boolean): this.type = { _yFlowDown = b; this }
   /** @return true if y flow direction is down. */
   def isYFlowDown = _yFlowDown
   /** Sets and goes to origin */
-  def origin(x: Int, y: Int) : this.type = { 
-    _origin(0) = x; 
+  def origin(x: Int, y: Int): this.type = {
+    _origin(0) = x;
     _origin(1) = y;
     toOrigin
   }
   /** Set pointer to origin */
-  def toOrigin : this.type = { 
+  def toOrigin: this.type = {
     _pt(0) = _origin(0)
     _pt(1) = _origin(1)
     this
@@ -987,63 +1109,64 @@ extends Panel with LayoutContainer {
   def getXStep = (if (_xFlowRight) 1 else -1)
   /** Get the amount to step in the x */
   def getYStep = (if (_yFlowDown) 1 else -1)
-  
-  /** If a step goes this far from origin in flow direction, increments
-  * secondary direction and seeks back to origin in flow direction.
-  */
-  def wrapAfter(i: Int) : this.type = {
+
+  /**
+   * If a step goes this far from origin in flow direction, increments
+   * secondary direction and seeks back to origin in flow direction.
+   */
+  def wrapAfter(i: Int): this.type = {
     require(i >= 0)
     _wrapAfter = i
     this
   }
-  
+
   /** increment 1 in flow direction */
-  def step : this.type = step(1)
-  
+  def step: this.type = step(1)
+
   /** increment however many in flow direction, wrapping if specified */
-  def step(i: Int) : this.type = {
+  def step(i: Int): this.type = {
     if (_flowX) {
       _pt(0) += getXStep * i
       if (_wrapAfter > 0) {
-         if (_xFlowRight) {
-            if (_pt(0) >= _origin(0) + _wrapAfter) newRow
-         } else {
-           if (_pt(0) <= _origin(0) - _wrapAfter) newRow
-         }
+        if (_xFlowRight) {
+          if (_pt(0) >= _origin(0) + _wrapAfter) newRow
+        } else {
+          if (_pt(0) <= _origin(0) - _wrapAfter) newRow
+        }
       }
     } else {
       _pt(1) += getYStep * i
       if (_wrapAfter > 0) {
-         if (_yFlowDown) {
-            if (_pt(1) >= _origin(1) + _wrapAfter) newCol
-         } else {
-           if (_pt(1) <= _origin(1) - _wrapAfter) newCol
-         }
+        if (_yFlowDown) {
+          if (_pt(1) >= _origin(1) + _wrapAfter) newCol
+        } else {
+          if (_pt(1) <= _origin(1) - _wrapAfter) newCol
+        }
       }
     }
     this
   }
-  
+
   /** Set x to x of origin and step y in y flow direction */
-  def newRow : this.type = { 
+  def newRow: this.type = {
     _pt(0) = _origin(0)
     _pt(1) += getYStep
     this
   }
-  
+
   /** Set y to y of origin and step x in x flow direction */
-  def newCol : this.type = { 
-    _pt(0) += getXStep 
+  def newCol: this.type = {
+    _pt(0) += getXStep
     _pt(1) = _origin(1);
     this
   }
-  
-  /** 
+
+  /**
    * For a component to take up the whole side, unless something
    * else is docked.  Operates independent of normal cell range
    * @return Fresh CC
    */
-  def dock(dock: Dock.Value, comp: Component) : CC = {
+  def dock(dock: Dock.Value, comp: Component): CC = {
     val cc = install(comp)
     val j = cc.java
     dock match {
@@ -1052,31 +1175,31 @@ extends Panel with LayoutContainer {
       case Dock.South => j.dockSouth
       case Dock.East => j.dockEast
       case _ =>
-    } 
+    }
     cc
   }
-  
+
   /** Refresh interval */
   def getDebugMillis = _lc.java.getDebugMillis
-  
-  /** 
+
+  /**
    * Does the conventional debug, just allows calling it without defining
-   * an LC in the constructor.  (One gets created regardless) 
-   */    
-  def debug(millis: Int) : this.type = { 
+   * an LC in the constructor.  (One gets created regardless)
+   */
+  def debug(millis: Int): this.type = {
     _lc.java.debug(millis)
     this
   }
-  
-  /** 
-   * Does the conventional debug with default refresh, just allows calling 
-   * it without defining an LC in the constructor.  (One gets created 
-   * regardless)
-   */    
-  def debug : this.type = debug(1000)
-  
+
   /**
-   * Arrange for useful tool tips telling the constraints are set on the 
+   * Does the conventional debug with default refresh, just allows calling
+   * it without defining an LC in the constructor.  (One gets created
+   * regardless)
+   */
+  def debug: this.type = debug(1000)
+
+  /**
+   * Arrange for useful tool tips telling the constraints are set on the
    * components
    * @return this
    */
@@ -1085,13 +1208,13 @@ extends Panel with LayoutContainer {
     val tip = new StringBuilder("<html>");
     str(_lc, tip)
     rowC match {
-      case Some(rowC) => 
+      case Some(rowC) =>
         tip.append("RowC = <br/>")
         str(rowC, tip)
       case _ => tip.append("RowC = null<br/>");
     }
     colC match {
-      case Some(colC) => 
+      case Some(colC) =>
         tip.append("ColC = <br/>")
         str(colC, tip)
       case _ => tip.append("ColC = null<br/>");
@@ -1100,12 +1223,12 @@ extends Panel with LayoutContainer {
     addCompTips
     this
   }
-  
+
   private def addCompTips() {
     peer.addContainerListener(new ContListener)
     contents.foreach(setCompTips(_))
   }
-  
+
   /** Debug tool tip stuff */
   private def str(lc: LC, tip: StringBuilder) {
     val l = lc.java
@@ -1131,30 +1254,30 @@ extends Panel with LayoutContainer {
     row(tip, "TopToBottom", l.isTopToBottom)
     row(tip, "VisualPadding", l.isVisualPadding)
   }
-  
+
   /** Debug tool tip stuff */
   private def str(ac: AC, tip: StringBuilder) {
     var i = 0
     ac.java.getConstaints.foreach(c => {
-        i += 1
-        tip.append(i).append(".<br>")
-        row(tip, "Align", c.getAlign)
-        row(tip, "EndGroup", c.getEndGroup)
-        row(tip, "GapAfter", c.getGapAfter)
-        row(tip, "GapBefore", c.getGapBefore)
-        row(tip, "Grow", c.getGrow)
-        row(tip, "GrowPriority", c.getGrowPriority)
-        row(tip, "Shrink", c.getShrink)
-        row(tip, "ShrinkPriority", c.getShrinkPriority)
-        row(tip, "Size", c.getSize)
-        row(tip, "SizeGroup", c.getSizeGroup)
-      })
+      i += 1
+      tip.append(i).append(".<br>")
+      row(tip, "Align", c.getAlign)
+      row(tip, "EndGroup", c.getEndGroup)
+      row(tip, "GapAfter", c.getGapAfter)
+      row(tip, "GapBefore", c.getGapBefore)
+      row(tip, "Grow", c.getGrow)
+      row(tip, "GrowPriority", c.getGrowPriority)
+      row(tip, "Shrink", c.getShrink)
+      row(tip, "ShrinkPriority", c.getShrinkPriority)
+      row(tip, "Size", c.getSize)
+      row(tip, "SizeGroup", c.getSizeGroup)
+    })
   }
-  
+
   /** Debug tool tip stuff */
   private def setCompTips(comp: Component) {
     val cc = mig.getConstraintMap.get(comp.peer).
-    asInstanceOf[net.miginfocom.layout.CC]
+      asInstanceOf[net.miginfocom.layout.CC]
     val dirs = Array(null, "North", "West", "South", "East")
     if (cc != null) {
       val tip = new StringBuilder("<html>CC = <br/>")
@@ -1180,22 +1303,22 @@ extends Panel with LayoutContainer {
       comp.tooltip = tip.append("</html>").toString
     }
   }
-  
+
   /** Debug tool tip stuff */
   private class ContListener extends ContainerListener() {
-    override def componentAdded(ev: ContainerEvent) = 
+    override def componentAdded(ev: ContainerEvent) =
       SwingUtilities.invokeLater(new Runnable {
-          def run() = {
-            val child = ev.getChild
-            contents.find(c => c.peer == child) match {
-              case Some(c) => setCompTips(c)
-              case _ => 
-            }
+        def run() = {
+          val child = ev.getChild
+          contents.find(c => c.peer == child) match {
+            case Some(c) => setCompTips(c)
+            case _ =>
           }
-        })
-    override def componentRemoved(ev: ContainerEvent) = { }
+        }
+      })
+    override def componentRemoved(ev: ContainerEvent) = {}
   }
-  
+
   /** Debug tool tip stuff */
   private def row(tip: StringBuilder, name: String, value: Any) {
     if (value != null) {
@@ -1209,91 +1332,80 @@ extends Panel with LayoutContainer {
       } else if (value.isInstanceOf[BoundSize]) {
         val s = str(value.asInstanceOf[BoundSize])
         if (s != null) tip.append("&nbsp;").append(name).append(" = ").
-        append(s).append("<br/>")
+          append(s).append("<br/>")
       } else if (value.isInstanceOf[Dimension]) {
         tip.append("&nbsp;").append(name).append(" = ").
-        append(str(value.asInstanceOf[Dimension])).append("<br/>")
+          append(str(value.asInstanceOf[Dimension])).append("<br/>")
       } else {
         tip.append("&nbsp;").append(name).append(" = ").append(value).
-        append("<br/>")
+          append("<br/>")
       }
     }
   }
-  
+
   /** Tool tip printing */
-  private def str(dim: Dimension) : String = {
+  private def str(dim: Dimension): String = {
     dim.width + " X " + dim.height
   }
-  
+
   /** Tool tip printing */
-  private def str(pad: Array[UnitValue]) : String = {
+  private def str(pad: Array[UnitValue]): String = {
     if (pad == null) null else {
       val sb = new StringBuilder("[");
       pad.map(unitValue => {
-          if (unitValue == null) "null" else UV.toUV(unitValue)
-        }).addString(sb, ",")
+        if (unitValue == null) "null" else UV.toUV(unitValue)
+      }).addString(sb, ",")
       sb.append("]").toString
     }
   }
-  
+
   /** Tool tip printing */
-  private def str(bs: BoundSize) : String = {
+  private def str(bs: BoundSize): String = {
     if (bs == null) null else {
       val s = str(bs.getMin) + ":" + str(bs.getPreferred) + ":" +
-      str(bs.getMax)
+        str(bs.getMax)
       if ("n:n:n" == s) null else s
     }
   }
-  
+
   /** Tool tip printing */
-  private def str(uv: UnitValue) : String = {
-    if (uv == null) "n" else { 
+  private def str(uv: UnitValue): String = {
+    if (uv == null) "n" else {
       val str = uv.getConstraintString
       if (str == "()") "n" else str
     }
   }
-  
+
   override protected def constraintsFor(comp: Component) = layout(comp)
-     
-  override protected def areValid(c: CC): (Boolean, String) = 
+
+  override protected def areValid(c: CC): (Boolean, String) =
     (true, "Like we really checked")
-  
+
   /* @return Column constraints */
-  def getColC : Option[ColC] = {
-    val ac = 
+  def getColC: Option[ColC] = {
+    val ac =
       mig.getColumnConstraints.asInstanceOf[net.miginfocom.layout.AC]
     if (ac == null) None else Some(new ColC(ac))
   }
-  
+
   /* @return Row constraints */
-  def getRowC : Option[RowC] = {
-    val ac =  
+  def getRowC: Option[RowC] = {
+    val ac =
       mig.getRowConstraints.asInstanceOf[net.miginfocom.layout.AC]
     if (ac == null) None else Some(new RowC(ac))
   }
-  
-  /** Pass 2 functions that will be used to create a LayoutCallback */
-  def addLayoutCallback(getSize: (ComponentWrapper) => Array[BoundSize],
-                        correctBounds: (ComponentWrapper) => Unit) {
-    mig.addLayoutCallback(new LayoutCallback() {
-        override def getSize(comp: ComponentWrapper) : Array[BoundSize] =
-          getSize(comp)
-        override def correctBounds(comp: ComponentWrapper) : Unit =
-          correctBounds(comp)
-      })
-  }
-  
+
   /**
    * The Layout should already be on the correct cell, probably as the
    * result of a wrap
    * @param container add in this container which is using MigLayout
    * @param btns add this components, centered on row and with same width
    */
-  def addBtnRow(sameSize: Boolean, btns: Component*) : Unit = {
-    addBtnRow(-1, sameSize, btns:_*)
+  def addBtnRow(sameSize: Boolean, btns: Component*): Unit = {
+    addBtnRow(-1, sameSize, btns: _*)
   }
 
-  /** 
+  /**
    * Flow in layout should be X
    * @param row Add on this row unless < 0
    * @param container add in this container which is using MigLayout
@@ -1312,72 +1424,126 @@ extends Panel with LayoutContainer {
     }
     val bs0 = BS.toBS(0)
     put(MigPanel.createSpring).spanX.flowX.sizeGroupX(spaceSizeGroup).
-    gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).growX
+      gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).growX
     val cs = cc.sizeGroupX(spaceSizeGroup).
-    gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).fillX
+      gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).fillX
     val cb = cc.gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0)
     if (sameSize) {
       cb.sizeGroupX(btnSizeGroup)
     }
     btns.foreach(comp => {
-        put(cs, MigPanel.createSpring)
-        put(cb, comp)
-      })
+      put(cs, MigPanel.createSpring)
+      put(cb, comp)
+    })
     put(cs, MigPanel.createSpring)
     put(cs, MigPanel.createSpring)
   }
-  
+
   /** Invisible component that pushes in X */
-  def addXSpring: CC = 
+  def addXSpring: CC =
     add(MigPanel.createSpring).fillX.height(BS.toBS(0))
   def addXSpringDebug: CC = add(MigPanel.createSpringDebug(Color.red)).fillX.
-  height(BS.toBS(Consts._NARROW))
+    height(BS.toBS(Consts._NARROW))
   /** Invisible component that pushes in Y */
-  def addYSpring: CC = 
+  def addYSpring: CC =
     add(MigPanel.createSpring).fillY.width(BS.toBS(0))
   def addYSpringDebug: CC = add(MigPanel.createSpringDebug(Color.red)).fillY.
-  width(BS.toBS(Consts._NARROW))
+    width(BS.toBS(Consts._NARROW))
   /** Invisible component that pushes in X and Y */
-  def addXYSpring: CC = add(MigPanel.createSpring).fillX.fillY 
-  def addXYSpringDebug: CC = 
+  def addXYSpring: CC = add(MigPanel.createSpring).fillX.fillY
+  def addXYSpringDebug: CC =
     add(MigPanel.createSpringDebug(Color.red)).fillX.fillY
   /** Invisible component of given width */
-  def addXStrut(len: Int): CC = 
+  def addXStrut(len: Int): CC =
     add(MigPanel.createSpring).width(BS.toBS(len)).height(BS.toBS(0))
   def addXStrutDebug(len: Int): CC = add(MigPanel.createSpringDebug(
-      Color.green)).width(BS.toBS(len)).height(BS.toBS(Consts._NARROW))
+    Color.green)).width(BS.toBS(len)).height(BS.toBS(Consts._NARROW))
   /** Invisible component of given height */
-  def addYStrut(len: Int): CC = 
+  def addYStrut(len: Int): CC =
     add(MigPanel.createSpring).width(BS.toBS(0)).height(BS.toBS(len))
   def addYStrutDebug(len: Int): CC = add(MigPanel.createSpringDebug(
-      Color.green)).width(BS.toBS(Consts._NARROW)).height(BS.toBS(len))
+    Color.green)).width(BS.toBS(Consts._NARROW)).height(BS.toBS(len))
   /** Invisible component of given width, height */
-  def addXYStrut(w: Int, h: Int): CC = 
+  def addXYStrut(w: Int, h: Int): CC =
     add(MigPanel.createSpring).width(BS.toBS(w)).height(BS.toBS(h))
   def addXYStrutDebug(w: Int, h: Int): CC = add(MigPanel.createSpringDebug(
-      Color.green)).width(BS.toBS(w)).height(BS.toBS(h))
-  
+    Color.green)).width(BS.toBS(w)).height(BS.toBS(h))
+
+  /**
+   * Adds the callback functions that will be called at different stages of the
+   * layout cycle.  Because the java LayoutCallback methods are called with the peer
+   * we register each component individually and map peer to a MigCallback that
+   * holds the Component, and 3 callback methods.  Since the components are unique
+   *  in the world, we use a weak global map.
+   * @param callback Something overriding a method or more in Callback
+   * @param comps Components to use the callback.
+   */
+
+  /** @return The callback info for a component, creating if necessary. */
+  private[smig] def migCallback(component: Component): MigCallback = {
+    val peer = component.peer
+    MigPanel._callbacksByPeer.get(peer) match {
+      case Some(callback) => callback
+      case None =>
+        val cb = new MigCallback(component)
+        MigPanel._callbacksByPeer.put(peer, cb)
+        cb
+    }
+  }
+
+  /** Add callback function to return absolute position relative to container. */
+  def addPositionCallback(callback: (Component) => Option[(UV, UV, UV, UV)],
+    comps: Component*) {
+    comps.foreach(comp => { migCallback(comp).position = callback })
+    initCallbacks
+  }
+
+  /** Add callback function to return size. */
+  def addSizeCallback(callback: (Component) => Option[(BS, BS)],
+    comps: Component*) {
+    comps.foreach(comp => { migCallback(comp).size = callback })
+    initCallbacks
+  }
+
+  /**
+   * Add callback function to return last minute change of the bounds. The bound
+   * for the layout cycle has been set and you can correct there using
+   * any set of rules you like.
+   */
+  def addCorrectBoundsCallback(callback: (Component) => Option[(Int, Int, Int, Int)],
+    comps: Component*) {
+    comps.foreach(comp => { migCallback(comp).correctBounds = callback })
+    initCallbacks
+  }
+
+  private def initCallbacks =
+    if (!_hasCallbacks) {
+      _hasCallbacks = true
+      mig.addLayoutCallback(SmigLayoutCallback)
+    }
+
   /** If several components want to use the same constraints. */
   def cc = new CC()
-  
-  /** 
+
+  /**
    *   CCCC    CCCC
    *  C       C
    *  C       C      ***********************************************************
    *  C       C
    *   CCCCC   CCCCC
    *
-   * Component constraints (Subclass of MigPanel you observe) */
-  
+   * Component constraints (Subclass of MigPanel you observe)
+   */
+
   type CC = Constraints // more natural for mig users
-  
+
   class Constraints private[smig] (cc: net.miginfocom.layout.CC) extends Cloneable {
     private[smig] var _cc = cc
-    
+
     def this() = this(new net.miginfocom.layout.CC())
-    
-    /** The java CC wasn't clonable */
-    private[smig] def copy : CC = {
+
+    /** The java CC didn't implement Cloneable */
+    private[smig] def copy: CC = {
       val cc = new net.miginfocom.layout.CC
       cc.setCellX(_cc.getCellX)
       cc.setCellY(_cc.getCellY)
@@ -1417,270 +1583,278 @@ extends Panel with LayoutContainer {
       }
       new CC(cc)
     }
-    
-    def alignX(a: AlignX) : this.type = { _cc.alignX(a._a); this }
-    
-    def alignY(a: AlignY) : this.type = { _cc.alignY(a._a); this }
-  
-    def align(aX: AlignX, aY: AlignY) : this.type = {
+
+    def alignX(a: AlignX): this.type = { _cc.alignX(a._a); this }
+
+    def alignY(a: AlignY): this.type = { _cc.alignY(a._a); this }
+
+    def align(aX: AlignX, aY: AlignY): this.type = {
       _cc.alignX(aX._a)
       _cc.alignY(aY._a)
       this
     }
-    def getAlignX : AlignX = AlignX.toAlignX(_cc.getHorizontal.getAlign) 
-    def getAlignY : AlignY = AlignY.toAlignY(_cc.getVertical.getAlign) 
-    
-    /** @return x coord */
-    def getCellX : Int = _cc.getCellX
-    
-    /** @return y coord */
-    def getCellY : Int = _cc.getCellY
-    
-    def getDock : Dock.Value = Dock(_cc.getDockSide)
-    
-    /** 
+    def getAlignX: AlignX = AlignX.toAlignX(_cc.getHorizontal.getAlign)
+    def getAlignY: AlignY = AlignY.toAlignY(_cc.getVertical.getAlign)
+
+    /** @return x coordinate */
+    def getCellX: Int = _cc.getCellX
+
+    /** @return y coordinate */
+    def getCellY: Int = _cc.getCellY
+
+    def getDock: Dock.Value = Dock(_cc.getDockSide)
+
+    /**
      * Specifies that the component should be put in the X end group grp and
-     * will thus share the same ending coordinate as them within the group. 
+     * will thus share the same ending coordinate as them within the group.
      * @return this
      */
-    def endGroupX(grp: String) : this.type = { _cc.endGroupX(grp); this }
-    /** 
+    def endGroupX(grp: String): this.type = { _cc.endGroupX(grp); this }
+    /**
      * Specifies that the component should be put in the Y end group grp and
-     * will thus share the same ending coordinate as them within the group. 
+     * will thus share the same ending coordinate as them within the group.
      * @return this
      */
-    def endGroupY(grp: String) : this.type = { _cc.endGroupY(grp); this }
+    def endGroupY(grp: String): this.type = { _cc.endGroupY(grp); this }
     def getEndGroupX = _cc.getHorizontal.getEndGroup
     def getEndGroupY = _cc.getVertical.getEndGroup
-    
-    def external : this.type = { _cc.external; this }
-    def isExternal : Boolean = _cc.isExternal
-    
+
+    def external: this.type = { _cc.external; this }
+    def isExternal: Boolean = _cc.isExternal
+
     /**
      * Convenience method for what is required to make something fill space in
      * the X direction.  It is shorthand for growX.pushX
      */
-    def fillX : this.type = { _cc.growX; _cc.pushX; this }
-    
+    def fillX: this.type = { _cc.growX; _cc.pushX; this }
+
     /**
      * Convenience method for what is required to make something fill space in
      * the X direction.  It is shorthand for growX.pushX
      */
-    def fillY : this.type = { _cc.growY; _cc.pushY; this }
-    
+    def fillY: this.type = { _cc.growY; _cc.pushY; this }
+
     /** Flow in X direction within cell */
-    def flowX : this.type = { _cc.setFlowX(true);  this }
+    def flowX: this.type = { _cc.setFlowX(true); this }
     /** Flow in Y direction within cell */
-    def flowY : this.type = { _cc.setFlowX(false);  this }
-    def isFlowX : Boolean = { 
+    def flowY: this.type = { _cc.setFlowX(false); this }
+    def isFlowX: Boolean = {
       _cc.getFlowX match {
         case null => true
         case _ => flowX.asInstanceOf[Boolean]
       }
     }
-    
+
     /** Gap above a component */
-    def gapTop(bs: BS) : this.type = { _cc.gapTop(bs.toString); this }
+    def gapTop(bs: BS): this.type = { _cc.gapTop(bs.toString); this }
     /** Gap left of a component */
-    def gapLeft(bs: BS) : this.type = { _cc.gapLeft(bs.toString); this }
+    def gapLeft(bs: BS): this.type = { _cc.gapLeft(bs.toString); this }
     /** Gap below a component */
-    def gapBottom(bs: BS) : this.type = { _cc.gapBottom(bs.toString); this }
+    def gapBottom(bs: BS): this.type = { _cc.gapBottom(bs.toString); this }
     def gapB(bs: BS) = gapBottom(bs)
     /** Gap right of a component */
-    def gapRight(bs: BS) : this.type = { _cc.gapRight(bs.toString); this }
-    def gapX(left: BS, right: BS) : this.type = { 
+    def gapRight(bs: BS): this.type = { _cc.gapRight(bs.toString); this }
+    def gapX(left: BS, right: BS): this.type = {
       gapLeft(left)
       gapRight(right)
       this
     }
-    def gapY(top: BS, bottom: BS) : this.type = { 
+    def gapY(top: BS, bottom: BS): this.type = {
       gapTop(top);
-      gapBottom(bottom); 
+      gapBottom(bottom);
       this
     }
-    
+
     /** X growth weight for when several items in cell, sets to 100 */
-    def growX : this.type = growX(100.0F)
+    def growX: this.type = growX(100.0F)
     /** X growth weight for when several items in cell*/
-    def growX(g: Float) : this.type = {
+    def growX(g: Float): this.type = {
       require(g >= 0.0F)
       _cc.growX(g)
       this
     }
     def getGrowX = _cc.getHorizontal.getGrow
-    
+
     /** Y growth weight for when several items in cell, sets to 100 */
-    def growY : this.type = growY(100.0F)
+    def growY: this.type = growY(100.0F)
     /** Y growth weight for when several items in cell*/
-    def growY(g: Float) : this.type = {
+    def growY(g: Float): this.type = {
       require(g >= 0.0F)
       _cc.growY(g)
       this
     }
     def getGrowY = _cc.getVertical.getGrow
-    
+
     /** The X grow priority compared to other components in the same cell. */
-    def growPrioX(i: Int) : this.type = {
+    def growPrioX(i: Int): this.type = {
       require(i >= 0)
       _cc.growPrioX(i)
       this
     }
     def getgrowPrioX = _cc.getHorizontal.getGrowPriority
-    
+
     /** The Y grow priority compared to other components in the same cell. */
-    def growPrioY(i: Int) : this.type = {
+    def growPrioY(i: Int): this.type = {
       require(i >= 0)
       _cc.growPrioY(i)
       this
     }
     def getgrowPrioY = _cc.getHorizontal.getGrowPriority
-    
-    /** The minimum width for the component. The value will override any value 
-     that is set on the component itself. */
-    def minWidth(uv: UV) : this.type = { _cc.minWidth(uv.toString); this }
-    
+
+    /**
+     * The minimum width for the component. The value will override any value
+     * that is set on the component itself.
+     */
+    def minWidth(uv: UV): this.type = { _cc.minWidth(uv.toString); this }
+
     /** The width for the component as a bound size */
-    def width(bs: BS) : this.type = { _cc.width(bs.toString); this }
+    def width(bs: BS): this.type = { _cc.width(bs.toString); this }
     def w(bs: BS) = width(bs)
-    
-    /** The maximum width for the component. The value will override any value 
-     that is set on the component itself. */
-    def maxWidth(uv: UV) : this.type = { _cc.maxWidth(uv.toString); this }
-    
-    /** The minimum height for the component. The value will override any value 
-     that is set on the component itself. */
-    def minHeight(uv: UV) : this.type = { _cc.minHeight(uv.toString); this }
-    
+
+    /**
+     * The maximum width for the component. The value will override any value
+     * that is set on the component itself.
+     */
+    def maxWidth(uv: UV): this.type = { _cc.maxWidth(uv.toString); this }
+
+    /**
+     * The minimum height for the component. The value will override any value
+     * that is set on the component itself.
+     */
+    def minHeight(uv: UV): this.type = { _cc.minHeight(uv.toString); this }
+
     /** The height for the component as a bound size */
-    def height(bs: BS) : this.type = { _cc.height(bs.toString); this }
+    def height(bs: BS): this.type = { _cc.height(bs.toString); this }
     def h(bs: BS) = height(bs)
-    
-    /** The maximum height for the component. The value will override any value 
-     that is set on the component itself. */
-    def maxHeight(uv: UV) : this.type = { _cc.maxHeight(uv.toString); this }
-    
-    def pad(top: UV, left: UV, bottom: UV, right: UV) : this.type = {
-      _cc.setPadding(Array[UnitValue](top._value, left._value, 
-                                      bottom._value, right._value))
+
+    /**
+     * The maximum height for the component. The value will override any value
+     * that is set on the component itself.
+     */
+    def maxHeight(uv: UV): this.type = { _cc.maxHeight(uv.toString); this }
+
+    def pad(top: UV, left: UV, bottom: UV, right: UV): this.type = {
+      _cc.setPadding(Array[UnitValue](top._value, left._value,
+        bottom._value, right._value))
       this
     }
-    def pad(f: Float) : this.type = { 
+    def pad(f: Float): this.type = {
       val uv = UV.toUV(f)
-      pad(uv, uv, uv, uv); 
-      this 
+      pad(uv, uv, uv, uv);
+      this
     }
     /** @return the absolute resizing in the last stage of the layout cycle. */
-    def getPad() : Option[(UV, UV, UV, UV)] = {
+    def getPad(): Option[(UV, UV, UV, UV)] = {
       val pad = _cc.getPadding()
       if (pad == null) None else {
         Some((UV.toUV(pad(0)), UV.toUV(pad(1)),
-              UV.toUV(pad(2)), UV.toUV(pad(3))))
+          UV.toUV(pad(2)), UV.toUV(pad(3))))
       }
     }
-    
+
     /**
      * "pushX" indicates that the column that this component is in (the first
      * if the component spans several) should default to growing.  If any column
      * has been set to push, this value on the component does nothing as
-     * column push takes precedence. 
+     * column push takes precedence.
      */
-    def pushX(weight: Float) : this.type = { _cc.pushX(weight); this }
-    def getPushX : Option[Float] = {
+    def pushX(weight: Float): this.type = { _cc.pushX(weight); this }
+    def getPushX: Option[Float] = {
       val f = _cc.getPushX
       if (f == null) None else Some(f.asInstanceOf[Float])
     }
-    
+
     /**
      * "pushY" indicates that the row that this component is in (the first
      * if the component spans) should default to growing.  If any row
      * has been set to push, this value on the component does nothing as
      * row push takes precedence.
      */
-    def pushY(weight: Float) : this.type = { _cc.pushY(weight); this }
-    def getPushY : Option[Float] = {
+    def pushY(weight: Float): this.type = { _cc.pushY(weight); this }
+    def getPushY: Option[Float] = {
       val f = _cc.getPushY
       if (f == null) None else Some(f.asInstanceOf[Float])
     }
-    
+
     /** Same as pushX(100.0F) */
-    def pushX : this.type = pushX(100.0F)
+    def pushX: this.type = pushX(100.0F)
     /** Same as pushY(100.0F) */
-    def pushY : this.type = pushY(100.0F)
+    def pushY: this.type = pushY(100.0F)
     /** Same as pushX, pushY */
-    def push : this.type = { _cc.pushX; _cc.pushY; this }
-    
+    def push: this.type = { _cc.pushX; _cc.pushY; this }
+
     /** Shrink weight for the component */
-    def shrinkX(g: Float) : this.type = {
+    def shrinkX(g: Float): this.type = {
       require(g >= 0.0F)
       _cc.shrinkX(g)
       this
     }
     def getShrinkX = _cc.getHorizontal.getShrink
-    
+
     /** Shrink weight for the component */
-    def shrinkY(g: Float) : this.type = {
+    def shrinkY(g: Float): this.type = {
       require(g >= 0.0F)
       _cc.shrinkY(g)
       this
     }
     def getShrinkY = _cc.getVertical.getShrink
-    
+
     /** The shrink priority compared to other components IN THE SAME CELL. */
-    def shrinkPrioX(i: Int) : this.type = {
+    def shrinkPrioX(i: Int): this.type = {
       require(i >= 0)
       _cc.shrinkPrioX(i)
       this
     }
     def getShrinkPrioX = _cc.getHorizontal.getShrinkPriority
-    
+
     /** The shrink priority compared to other components IN THE SAME CELL. */
-    def shrinkPrioY(i: Int) : this.type = {
+    def shrinkPrioY(i: Int): this.type = {
       require(i >= 0)
       _cc.shrinkPrioY(i)
       this
     }
     def getShrinkPrioY = _cc.getVertical.getShrinkPriority
-    
-    /** 
+
+    /**
      * Specifies that the component should be put in the size group and will
-     * thus share the size with others in the group. 
+     * thus share the size with others in the group.
      */
-    def sizeGroupX(grp: String) : this.type = { _cc.sizeGroupX(grp); this }
-    def sizeGroupY(grp: String) : this.type = { _cc.sizeGroupY(grp); this }
+    def sizeGroupX(grp: String): this.type = { _cc.sizeGroupX(grp); this }
+    def sizeGroupY(grp: String): this.type = { _cc.sizeGroupY(grp); this }
     def getSizeGroupX = _cc.getHorizontal.getSizeGroup
     def getSizeGroupY = _cc.getVertical.getSizeGroup
-    
+
     /**
      * Span completely in X direction
      */
-    def spanX : this.type = { _cc.spanX; this }
+    def spanX: this.type = { _cc.spanX; this }
     /**
      * The number of cells the cell that this constraint's component
      * will span in the X dimension.
      */
-    def spanX(w: Int) : this.type = { _cc.spanX(w); this }
-    def getSpanX : Int = _cc.getSpanY
-    
+    def spanX(w: Int): this.type = { _cc.spanX(w); this }
+    def getSpanX: Int = _cc.getSpanY
+
     /**
      * Span completely in Y direction
      */
-    def spanY : this.type = { _cc.spanY; this }
+    def spanY: this.type = { _cc.spanY; this }
     /**
      * The number of cells the cell that this constraint's component
      * will span in the Y dimension.
      */
-    def spanY(h: Int) : this.type = { _cc.spanY(h); this }
-    def getSpanY : Int = _cc.getSpanY
-    
-    def tag(t: String) : this.type  = { _cc.tag(t); this }
+    def spanY(h: Int): this.type = { _cc.spanY(h); this }
+    def getSpanY: Int = _cc.getSpanY
+
+    def tag(t: String): this.type = { _cc.tag(t); this }
     /**
      * @return The tag string
      */
-    def getTag : Option[String] = {
+    def getTag: Option[String] = {
       val tag = _cc.getTag
       if (tag == null) None else Some(tag)
     }
-    
+
     /** The java peer */
     def java = _cc
   }
@@ -1689,13 +1863,13 @@ extends Panel with LayoutContainer {
 private[smig] object Consts {
   private[smig] val _NARROW = 3;
 }
-/** 
- * An invisible component unless set to debug  
- * Use MigPanel.addXSpring, etc. 
+/**
+ * An invisible component unless set to debug
+ * Use MigPanel.addXSpring, etc.
  */
 class Spring private[smig] () extends Component {
   override lazy val peer: JComponent = new JLabel() with SuperMixin
-      
+
   /** Add name, width, color */
   private[smig] def debug(bg: Color): Spring = {
     name = "Debugged Spring"
