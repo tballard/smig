@@ -9,7 +9,7 @@ Another was to make it somewhat easier to debug.  I also rethought the
 way cells are specified and moved some parts of the API to where I like
 them better.  The callbacks are now added per component and separately,
 instead of as an all inclusive callback class.  I'm not too excited to use
-the java version, now, since this is so much better.    ;-)
+the java version, now, since this is so much better.  ;-)
 
 The demo unveils the basic usage.
 
