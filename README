@@ -2,14 +2,16 @@ First things first.  A smig is a kind of beard.  Sorta the goatee motif.
 Makes you look mighty sporty, similar to what this will do to your UI.
 
 This is a wrapper for the MigLayout java layout manager for use from Scala.
-Pretty much alpha and my first Scala project, but still not totally without
+Not bullet-proofed and my first Scala project, but still not totally without
 merit, I think.  One objective was to strongly type the heck out of
-it.  Another was to make it somewhat easier to debug.  I also rethought the
+it.  If you like doing all your specifications using strings, oh, well.  
+Another was to make it somewhat easier to debug.  I also rethought the
 way cells are specified and moved some parts of the API to where I like
-them better.  I'm not too excited to use the java version, now, since this 
-is so much better. ;-)
+them better.  The callbacks are now added per component and separately,
+instead of as an all inclusive callback class.  I'm not too excited to use
+the java version, now, since this is so much better.    ;-)
 
-The demo is worth your time.
+The demo unveils the basic usage.
 
 This file is in the root directory of a netbeans project.  The jars directory
 needs to  have miglayout-4.0-swing.jar and miglayout-4.0-swing.jar or some such
