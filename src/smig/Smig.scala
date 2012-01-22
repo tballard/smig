@@ -2,32 +2,35 @@ package smig
 
 import net.miginfocom.swing.MigLayout
 import net.miginfocom.layout.{
+  BoundSize,
   ComponentWrapper,
   ConstraintParser,
   LayoutCallback,
   LayoutUtil,
   UnitValue
 }
-import java.awt.{ Color, Dimension }
-import java.awt.event.{ ContainerEvent, ContainerListener }
+import java.awt.{ 
+  Color, 
+  Dimension 
+}
+import java.awt.event.{ 
+  ContainerEvent, 
+  ContainerListener 
+}
 import javax.swing.{
   JComponent,
   JLabel,
   JPanel,
   SwingUtilities,
-  Timer,
   ToolTipManager
 }
-import net.miginfocom.layout.BoundSize
 import scala.collection.JavaConversions._
+import scala.collection.mutable.WeakHashMap
 import scala.swing.{
   Component,
   LayoutContainer,
   Panel
 }
-import scala.collection.mutable.WeakHashMap
-import scala.collection.immutable.HashMap
-import java.awt.event.{ActionEvent, ActionListener }
 
 /**
  * First things first.  A smig is a kind of beard.  Sorta the goatee motif.
@@ -346,9 +349,7 @@ object BS {
   def apply(min: UV, pref: UV, max: UV): BS = new BS(min, pref, max)
 
   /** Convert an Int to a BS */
-  implicit def toBS(i: Int): BS = {
-    BS(UV.toUV(i))
-  }
+  implicit def toBS(i: Int): BS = BS(UV.toUV(i))
 
   /** Convert a UV to a BS */
   implicit def toBS(uv: UV): BS = BS(uv)
@@ -362,6 +363,8 @@ object BS {
       UV.toUV(boundSize.getPreferred),
       UV.toUV(boundSize.getMax))
   }
+  
+  implicit def toBS(f: Float) : BS = toBS(UV.toUV(f))
 
   implicit def toBoundSize(bs: BS): BoundSize =
     new BoundSize(bs.getMin._value, bs.getPref._value, bs.getMax._value, null)
@@ -829,16 +832,12 @@ private[smig] class Out(s: String) {
   }
 
   private[smig] def add(field: String, value: BoundSize): this.type = {
-    if (value != null) {
-      add(field, BS.toBS(value))
-    }
+    if (value != null) add(field, BS.toBS(value))
     this
   }
 
   private[smig] def add(field: String, value: UnitValue): this.type = {
-    if (value != null) {
-      add(field, UV.toUV(value))
-    }
+    if (value != null) add(field, UV.toUV(value))
     this
   }
 
@@ -862,10 +861,14 @@ private[smig] class MigCallback(comp: Component) {
   def component = comp
   /**
    * @return a [x, y, x2, y2] position similar to the "pos" in the component
-   * constraint. If defined, any non-null ones override the ones specified on the CC.
+   * constraint. If defined, any non-null ones override the ones specified 
+   * on the CC.
    */
   var position: (Component) => Option[(UV, UV, UV, UV)] = _
-  /** @return a size similar to the "width" and "height" in the component constraint. */
+  /** 
+   * @return a size similar to the "width" and "height" in the component
+   * constraint. 
+   */
   var size: (Component) => Option[(BS, BS)] = _
   /**
    * A last minute change of the bounds. The bound for the layout cycle has been
@@ -922,7 +925,8 @@ private object SmigLayoutCallback extends LayoutCallback {
     callback match {
       case Some(callback) =>
         callback.getCorrectBounds match {
-          case (i1, i2, i3, i4) => callback.component.peer.setBounds(i1, i2, i3, i4)
+          case (i1, i2, i3, i4) => 
+            callback.component.peer.setBounds(i1, i2, i3, i4)
           case _ =>
         }
       case _ =>
@@ -934,7 +938,8 @@ object MigPanel {
   private var _groupNum: Int = 0;
 
   /** Allow recovering Components based on the peer when doing callback */
-  private[smig] lazy val _callbacksByPeer = new WeakHashMap[JComponent, MigCallback]
+  private[smig] lazy val _callbacksByPeer = 
+    new WeakHashMap[JComponent, MigCallback]
 
   /**
    * May be used to generate unique group names.
@@ -1128,20 +1133,18 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
     if (_flowX) {
       _pt(0) += getXStep * i
       if (_wrapAfter > 0) {
-        if (_xFlowRight) {
+        if (_xFlowRight) 
           if (_pt(0) >= _origin(0) + _wrapAfter) newRow
-        } else {
+        else 
           if (_pt(0) <= _origin(0) - _wrapAfter) newRow
-        }
       }
     } else {
       _pt(1) += getYStep * i
       if (_wrapAfter > 0) {
-        if (_yFlowDown) {
+        if (_yFlowDown)
           if (_pt(1) >= _origin(1) + _wrapAfter) newCol
-        } else {
+        else
           if (_pt(1) <= _origin(1) - _wrapAfter) newCol
-        }
       }
     }
     this
@@ -1186,10 +1189,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
    * Does the conventional debug, just allows calling it without defining
    * an LC in the constructor.  (One gets created regardless)
    */
-  def debug(millis: Int): this.type = {
-    _lc.java.debug(millis)
-    this
-  }
+  def debug(millis: Int): this.type = { _lc.java.debug(millis); this}
 
   /**
    * Does the conventional debug with default refresh, just allows calling

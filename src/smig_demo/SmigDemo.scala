@@ -4,28 +4,74 @@
 
 package smig_demo
 
+import java.awt.{ 
+  Dimension, 
+  Font, 
+  Insets,
+  Point, 
+  Color, 
+  Graphics, 
+  Graphics2D, 
+  GradientPaint 
+}
 import java.awt.Color._
-import java.awt.Insets
-import java.awt.{ Dimension, Font, Point, Color, Graphics, Graphics2D, GradientPaint }
 import java.awt.Font._
-import javax.swing.SwingUtilities
 import scala.collection.mutable.HashMap
-import scala.swing.event.{ ButtonClicked, MouseMoved }
-import scala.swing.{ Button, Component, Container, Label, MainFrame, Panel, Publisher, SimpleSwingApplication, Swing }
-import javax.swing.{ JComponent, JPanel, Timer }
-import net.miginfocom.layout.{ BoundSize, ComponentWrapper, UnitValue }
+import scala.swing.event.{ 
+  ButtonClicked, 
+  MouseMoved 
+}
+import scala.swing.{ 
+  Button, 
+  Component, 
+  Container, 
+  Label, 
+  MainFrame, 
+  Panel,
+  Publisher, 
+  SimpleSwingApplication, 
+  Swing 
+}
+import javax.swing.{ 
+  JComponent, 
+  JPanel, 
+  Timer,
+  SwingUtilities
+}
+import net.miginfocom.layout.{ 
+  BoundSize, 
+  ComponentWrapper, 
+  UnitValue 
+}
 import scala.swing.Swing._
 import scala.util.Random
-import smig.{ AlignX, AlignY, BS, LC, MigCallback, MigPanel, RowC, ColC, PX, PCT, UV }
+import smig.{ 
+  AlignX, 
+  AlignY, 
+  BS, 
+  LC, 
+  MigCallback, 
+  MigPanel, 
+  RowC, 
+  ColC, 
+  PX,
+  PCT, 
+  UV 
+}
 import smig.AlignX._
 import smig.AlignY._
 import smig.Dock._
 import smig.XPos._
 import smig.YPos._
-import java.awt.event.{ ActionEvent, ActionListener }
+import java.awt.event.{ 
+  ActionEvent, 
+  ActionListener 
+}
 import net.miginfocom.layout.LayoutCallback
-import scala.swing.event.MouseExited
-import scala.swing.event.MouseEntered
+import scala.swing.event.{
+  MouseExited,
+  MouseEntered
+}
 
 object SmigDemo extends SimpleSwingApplication {
   override def top = new MainFrame {
@@ -70,19 +116,17 @@ object SmigDemo extends SimpleSwingApplication {
     RowC().align(Ybottom),
     ColC().i(0).align(Xright).i(1).align(Xleft).fill) {
     border = titled("Up")
-    flowY.debugTip
+    flowY
     "Pour in from bottom? Uh, ok like I'm sure.".split(" ").
       foreach(str => { add(new BLbl(str)) })
   }
 
   private def randPanel = new MigPanel() {
-    debugTip
     border = titled("Random Gap Demo")
     for { i <- 0 to 5 } add(block).sizeGroupX("blockx").sizeGroupY("blocky")
 
     private def block = new MigPanel(
       LC().insets(PX(0))) {
-      debugTip
       def rand = new Random
       border = titled("Rand")
       val top: Int = rand.nextInt(20)
@@ -96,7 +140,7 @@ object SmigDemo extends SimpleSwingApplication {
 
   private def fillPanels = new MigPanel(
     LC().gap(0, 0)) {
-    flowY.debugTip
+    flowY
     border = titled("No fill or grow here")
     // Note how add or put returns a CC for chaining
     add(fillPanel("just pushing").debugTip).pushX
@@ -108,7 +152,6 @@ object SmigDemo extends SimpleSwingApplication {
   private def fillPanel(lbl: String) = new MigPanel(
     LC().gap(1, 1),
     ColC().fill(2)) {
-    flowX.debugTip
     border = titled(lbl)
     for (i <- 0 to 3) {
       val grow = (i % 2) == 0
@@ -166,7 +209,7 @@ object SmigDemo extends SimpleSwingApplication {
 
   private def gapDemo = new MigPanel() {
     debug
-    border = titled("Gaps")
+    border = titled("Gaps (Debug on)")
     val bs = BS(5, 10, UV.INF)
     val zero = BS(0, 0, 0)
     add(new BLbl("Gap me all around, baby") {
@@ -191,7 +234,7 @@ object SmigDemo extends SimpleSwingApplication {
   }
 
   private def springDemo = new MigPanel() {
-    border = titled("Spring/Strut Demo")
+    border = titled("Spring/Strut Demo (debug tips on)")
     debugTip
     val dim = new Dimension(20, 20)
     for (x <- 0 to 6) {
@@ -239,54 +282,51 @@ object SmigDemo extends SimpleSwingApplication {
     addBtnRow(true, new Button("Exit"), new Button("Bail"), new Button("Quit"))
   }
 
-  private def titled(title: String) = {
-    TitledBorder(bord, title)
-  }
-
-  private def bord = EtchedBorder(Lowered)
-
-  private class BLbl(text: String) extends Label(text) {
-    border = bord
-  }
-
-  private class TBLbl(text: String, title: String) extends Label(text) {
-    border = titled(title)
-  }
-
   /** This is a rewrite of the callback demo that comes with Mig */
   private def callbackDemo = new MigPanel(
-    LC().alignX(AlignX.CENTER).alignY(AlignY.BOTTOM)) with ActionListener {
+    LC().alignX(AlignX.CENTER).alignY(AlignY.BOTTOM).fillX
+  ) with ActionListener {
     border = titled("MiG Layout Callback Demo - Click a button")
-
+    minimumSize = new Dimension(300, 120)
     private val _repaintTimer = new Timer(100, this)
     private val _pressMap = new HashMap[Component, Long]
     private var _mousePos: Point = _
 
-    val btns = (0 until 10).map(num => {
-      val btn = createBtn(num)
+    private val btns = "MIG LAYOUT".map(ch => {
+      val btn = createBtn(ch)
       add(btn)
       btn
     })
 
+    private def createBtn(ch: Char): Button = {
+      val button: Button = new Button(ch.toString) {
+        focusPainted = false
+        margin = new Insets(0, 0, 0, 0)
+      }
+      listenTo(button)
+      listenTo(mouse.moves)
+      button
+    }
+
     // This is the size change part
-    val resize = (comp: Component) => Option[(BS, BS)] {
+    private val resize = (comp: Component) => Option[(BS, BS)] {
       comp match {
         case (b: Button) =>
           val p: Point = if (_mousePos == null) new Point(-1000, -1000) else
             SwingUtilities.convertPoint(peer, _mousePos, b.peer)
           val fac = Math.sqrt(Math.pow(
-            Math.abs(p.x - b.size.width / 2f), 2) +
-            Math.pow(Math.abs(p.y - b.size.height / 2f), 2))
-          val fact = Math.max(2 - (fac / 200), 1).toFloat
-          val uv: UV = UV.toUV(new UnitValue(70 * fact))
-          val bs: BS = BS(uv)
+            Math.abs(p.x - b.size.width / 2.0f), 2.0f) +
+            Math.pow(Math.abs(p.y - b.size.height / 2.0f), 2.0f))
+          val fact = Math.max(2.0f - (fac / 200.0f), 1).toFloat
+          val bs = BS(50.0f * fact)
           (bs, bs)
         case _ => null
       }
     }
+    addSizeCallback(resize, btns: _*)
 
     // This is the bouncing part
-    val rebound = (c: Component) => Option[(Int, Int, Int, Int)] {
+    private val rebound = (c: Component) => Option[(Int, Int, Int, Int)] {
       _pressMap.get(c) match {
         case Some(l) =>
           val duration = System.currentTimeMillis - l
@@ -295,23 +335,18 @@ object SmigDemo extends SimpleSwingApplication {
           val maxHeight = origHeight - diminished
           val deltaY = math.round(math.abs(math.sin(duration / 300.0) *
             maxHeight)).intValue
-          val p = c.peer
           if (maxHeight < 0.5) {
             _pressMap.remove(c)
-            if (_pressMap.isEmpty) _repaintTimer.stop()
+            if (_pressMap.isEmpty) _repaintTimer.stop
           }
-          (p.getX, p.getY - deltaY, p.getWidth, p.getHeight())
+          val b = bounds
+          (b.x, b.y - deltaY, b.width, b.height)
         case None => null
       }
     }
     addCorrectBoundsCallback(rebound, btns: _*)
-    addSizeCallback(resize, btns: _*)
 
-    listenTo(this)
-
-    override def actionPerformed(ev: ActionEvent) = {
-      revalidate
-    }
+    override def actionPerformed(ev: ActionEvent) = revalidate
 
     override def paintComponent(g: Graphics2D) {
       g.setPaint(
@@ -319,19 +354,8 @@ object SmigDemo extends SimpleSwingApplication {
           size.height, new Color(240, 238, 235)))
       g.fillRect(0, 0, size.width, size.height)
     }
-
-    def createBtn(i: Int): Button = {
-      val ch: String = "MIG LAYOUT".charAt(i).toString
-      val button: Button = new Button(ch) {
-        focusPainted = false
-        margin = new Insets(0, 0, 0, 0)
-      }
-      listenTo(button)
-      listenTo(mouse.moves)
-      button
-    }
+    
     listenTo(mouse.moves)
-
     reactions += {
       case MouseMoved(comp, pt, modifiers) =>
         if (comp.isInstanceOf[Button]) {
@@ -345,11 +369,21 @@ object SmigDemo extends SimpleSwingApplication {
         _mousePos = null;
         revalidate
       case ButtonClicked(button) =>
-        _pressMap.put(button.asInstanceOf[Component], System.currentTimeMillis());
+        _pressMap.put(button.asInstanceOf[Component], System.currentTimeMillis);
         _repaintTimer.start();
     }
   }
+
+  private def titled(title: String) = TitledBorder(bord, title)
+
+  private def bord = EtchedBorder(Lowered)
+
+  private class BLbl(text: String) extends Label(text) {
+    border = bord
+  }
+
+  private class TBLbl(text: String, title: String) extends Label(text) {
+    border = titled(title)
+  }
 }
-
-
 
