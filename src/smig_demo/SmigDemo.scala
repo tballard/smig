@@ -16,7 +16,7 @@ import javax.swing.{ JComponent, JPanel, Timer }
 import net.miginfocom.layout.{ BoundSize, ComponentWrapper, UnitValue }
 import scala.swing.Swing._
 import scala.util.Random
-import smig.{ AlignX, AlignY, BS, LC, MigCallback, MigPanel, RowC, ColC, PX, PCT, UV }
+import smig.{ AlignX, AlignY, BS, ContX1, ContY1, ID, LC, MigCallback, MigPanel, Pref, RowC, ColC, PX, PCT, RelX, UV }
 import smig.AlignX._
 import smig.AlignY._
 import smig.Dock._
@@ -40,17 +40,15 @@ object SmigDemo extends SimpleSwingApplication {
       debugTip
       // Add conventional debug even without LC in constructor
       debug
-      dock(North, fillPanels)
+      dock(North, northPanel)
       put(wrapDemo); put(centeredDemo).fillX.fillY
       newRow.put(shrinkDemo).fillX; addXStrut(450)
       newRow.put(growDemo).fillX
       newRow.put(gapDemo).fillX
-      newRow.put(buttonsDemo).spanX.fillX
+      newRow.put(buttonsDemo).fillX
       newRow.put(springDemo).height(130).fillX
       newRow.put(endGroupDemo); put(randPanel)
-      val demo = callbackDemo
-      newRow.put(demo)
-
+      newRow.put(callbackDemo); 
       dock(East, eastPanel)
       dock(West, placementDemo)
       dock(South, sizeGroupDemo)
@@ -72,7 +70,7 @@ object SmigDemo extends SimpleSwingApplication {
     border = titled("Up")
     flowY.debugTip
     "Pour in from bottom? Uh, ok like I'm sure. Aligns right by default, now.".
-    split(" ").
+      split(" ").
       foreach(str => { add(new BLbl(str)) })
   }
 
@@ -93,6 +91,10 @@ object SmigDemo extends SimpleSwingApplication {
       add(new TBLbl("uh", "Uh!")).gapTop(top).gapLeft(left).
         gapBottom(bottom).gapRight(right)
     }
+  }
+  
+  private def northPanel = new MigPanel () {
+    add(fillPanels).fillX; put(snakePanel)
   }
 
   private def fillPanels = new MigPanel(
@@ -161,8 +163,8 @@ object SmigDemo extends SimpleSwingApplication {
 
   private def centeredDemo = new MigPanel() {
     border = titled("Centering")
-    add(new BLbl("Center me, baby") {
-    }).alignX(AlignX.CENTER).pushX
+    add(new BLbl("Center me, baby")).alignX(AlignX.CENTER).pushX.
+    alignY(AlignY.CENTER).pushY
   }
 
   private def gapDemo = new MigPanel() {
@@ -240,18 +242,23 @@ object SmigDemo extends SimpleSwingApplication {
     addBtnRow(true, new Button("Exit"), new Button("Bail"), new Button("Quit"))
   }
 
-  private def titled(title: String) = {
-    TitledBorder(bord, title)
-  }
+  private def snakePanel = new MigPanel() {
+    placeChar(new Random(1), "What is this?  A snake demo?", null)
 
-  private def bord = EtchedBorder(Lowered)
-
-  private class BLbl(text: String) extends Label(text) {
-    border = bord
-  }
-
-  private class TBLbl(text: String, title: String) extends Label(text) {
-    border = titled(title)
+    private def placeChar(rand: Random, str: String, id: ID) {
+      if (!str.isEmpty) {
+        val ch = str.substring(0, 1)
+        val rest = str.substring(1)
+        val lbl = new BLbl(ch)
+        if (" " == ch) lbl.visible = false
+        placeChar(rand, str.substring(1),
+          (if (id == null) {
+            put(lbl).pos(ContX1 + 5, ContY1 + 20)
+          } else {
+            put(lbl).pos(id.x2 + RelX, id.y1 + rand.nextInt(21) - 10)
+          }).id)
+      }
+    }
   }
 
   /** This is a rewrite of the callback demo that comes with Mig */
@@ -349,6 +356,20 @@ object SmigDemo extends SimpleSwingApplication {
         _pressMap.put(button.asInstanceOf[Component], System.currentTimeMillis());
         _repaintTimer.start();
     }
+  }
+
+  private def titled(title: String) = {
+    TitledBorder(bord, title)
+  }
+
+  private def bord = EtchedBorder(Lowered)
+
+  private class BLbl(text: String) extends Label(text) {
+    border = bord
+  }
+
+  private class TBLbl(text: String, title: String) extends Label(text) {
+    border = titled(title)
   }
 }
 
