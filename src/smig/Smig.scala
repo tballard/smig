@@ -1,3 +1,7 @@
+/*
+ * srcbin
+ */
+
 package smig
 
 import net.miginfocom.swing.MigLayout
@@ -6,7 +10,6 @@ import net.miginfocom.layout.{
   ConstraintParser,
   LayoutCallback,
   LayoutUtil,
-  PlatformDefaults,
   UnitValue
 }
 import java.awt.{ 
@@ -22,7 +25,6 @@ import javax.swing.{
   JLabel,
   JPanel,
   SwingUtilities,
-  Timer,
   ToolTipManager
 }
 import net.miginfocom.layout.BoundSize
@@ -33,24 +35,20 @@ import scala.swing.{
   Panel
 }
 import scala.collection.mutable.WeakHashMap
-import scala.collection.immutable.HashMap
-import java.awt.event.{
-  ActionEvent, 
-  ActionListener
-}
 
 /**
  * First things first.  A smig is a kind of beard.  Sorta the goatee motif.
  * Makes you look mighty sporty, similar to what this will do to your UI.
  * I guess it means a lot of other things, too, according to the slang 
- * dictionary. 
+ * dictionary.  Like this is smiggin' cool, dude.
  *
  * This is a wrapper for the mig layout manager for use from Scala.
  * It was designed to make things more type-safe than the java version
  * because, although not personally a nazi, I prefer APIs that are.
  *
  * Ready for production use?  As ready as a bunch of stuff you are already
- * using.  Pitch it in your project, patch it if it needs it and tell me about it.
+ * using.  Pitch it in your project, patch it if it needs it and tell me
+ * about it.
  *
  * It requires the mig jar file.  I was compiling against miglayout-4.0.jar.
  * Depending on the platform you need miglayout-4.0-swing.jar or similar.
@@ -62,64 +60,39 @@ import java.awt.event.{
  * I generally stuck with chaining instead of properties since it seemed more
  * succinct and the style is much like java which may be familiar to mig users.
  * And easier to use from java.
+ * 
+ * Options are used where nulls may be exposed.
  *
  * I rethought, and I believe, improved the cell selection API.  The calls
  * you know and love may have been replaced by counterparts in MigPanel.
  * 
- * The callbacks have been implemented in such a way as to allow submitting them
- * individually, seeing as functions are objects and all.
+ * The callbacks have been implemented in such a way as to allow submitting 
+ * them individually, seeing as functions are objects and all.
+ * 
+ * Examples of my '''fascism''' include:
+ *  
+ * * Enumerations for Dock, XPos, YPos, HideMode, Tag
+ * 
+ * * The ability to write arithmetic expressions in the specification strings
+ *   is replaced with arithmetic operations on classes representing unit values.
+ *   They try to make sense.  For instance there can only be one alignment in
+ *   an expression and you can only add to or subtract from it.  Multiplication
+ *   and division is by numbers only.
+ *   
+ * * All UnitValues are derived classes of UV, e.g. MM(25) or PCT(25)
  *
  * tom@geeksite.org
  */
 
 /** Specify 4 possible dock positions in component constraint */
 object Dock extends Enumeration {
+  type Dock = Value
   val North, West, South, East = Value
-
   private[smig] implicit def toString(dock: Value) =
     dock.toString.toLowerCase
 }
+import Dock._
 
-/** No constructor for you, but an XPos. Float, PCT, Int works */
-class AlignX private[smig] (a: String) { 
-  override def toString = a 
-}
-object AlignX {
-  implicit def toAlignX(p: XPos.Value) =
-    new AlignX(p.toString.substring(1))
-  implicit def toAlignX(f: Float) = new AlignX(f.toString)
-  implicit def toAlignX(p: PCT) = new AlignX(p.value.getValue + "%")
-  implicit def toAlignX(uv: UV) = new AlignX(uv.toString)
-  implicit def toAlignX(uv: UnitValue) =
-    new AlignX(uv.getValue + UV.typeString(uv.getUnit))
-
-  lazy val ZERO = AlignX.toAlignX(PX(0))
-  lazy val CENTER = AlignX.toAlignX(PCT(50))
-  lazy val LEFT = AlignX.toAlignX(PCT(0))
-  lazy val RIGHT = AlignX.toAlignX(PCT(100))
-  lazy val LEADING = AlignX.toAlignX(PCT(0))
-  lazy val TRAILING = AlignX.toAlignX(PCT(100))
-}
-
-class AlignY private[smig] (a: String) {
-  override def toString = a
-}
-object AlignY {
-  implicit def toAlignY(p: YPos.Value) =
-    new AlignY(p.toString.substring(1))
-  implicit def toAlignY(f: Float) = new AlignY(f.toString)
-  implicit def toAlignY(p: PCT) = new AlignY(p.value.getValue + "%")
-  implicit def toAlignY(uv: UV) = new AlignY(uv.toString)
-  implicit def toAlignY(uv: UnitValue) =
-    new AlignY(uv.getValue + UV.typeString(uv.getUnit))
-
-  lazy val ZERO = AlignY.toAlignY(PX(0))
-  lazy val CENTER = AlignY.toAlignY(PCT(50))
-  lazy val TOP = AlignY.toAlignY(PCT(0))
-  lazy val BOTTOM = AlignY.toAlignY(PCT(100))
-  lazy val LEADING = AlignY.toAlignY(PCT(0))
-  lazy val TRAILING = AlignY.toAlignY(PCT(100))
-}
 /**
  * These are specialized X alignments. Substring(1) of the name is the
  * string MigLayout uses
@@ -127,17 +100,77 @@ object AlignY {
 object XPos extends Enumeration {
   type XPos = Value
   val Xleft, Xright, Xcenter, Xleading, Xtrailing, Xbaseline = Value
-}
+} 
+import XPos._
 
 /** These are specialized Y alignments */
 object YPos extends Enumeration {
   type YPos = Value
   val Ytop, Ybottom, Ycenter, Yleading, Ytrailing, Ybaseline = Value
 }
+import YPos._
 
+/** Uses for tell behavior when component is hidden. */
 object HideMode extends Enumeration {
   type HideMode = Value
   val Visible, ZeroSquareGaps, ZeroSquareNoGaps, NoCell = Value
+}
+import HideMode._
+
+object Tag extends Enumeration {
+  type Tag = Value
+  val Ok, Cancel, Help, Help2, Yes, No, Apply, Back,
+    Next, Finish, Left, Right = Value
+  private[smig] implicit def toString(tag: Value) =
+    tag.toString.toLowerCase
+}
+import Tag._
+
+/** 
+ * No constructor for you, but XPos. Float, PCT, Int work as well as
+ * the vals AlignX.{ZERO_X, CENTER_X, LEFT, RIGHT, LEADING_X, TRAILING_X} 
+ */
+class AlignX private[smig] (a: String) { 
+  override def toString = a 
+}
+object AlignX {
+  implicit def toAlignX(p: XPos) =
+    new AlignX(p.toString.substring(1))
+  implicit def toAlignX(f: Float) = new AlignX(f.toString)
+  implicit def toAlignX(p: PCT) = new AlignX(p.value.getValue + "%")
+  implicit def toAlignX(uv: UV) = new AlignX(uv.toString)
+  implicit def toAlignX(uv: UnitValue) =
+    new AlignX(uv.getValue + UV.typeString(uv.getUnit))
+
+  lazy val ZERO_X = AlignX.toAlignX(PX(0))
+  lazy val CENTER_X = AlignX.toAlignX(PCT(50))
+  lazy val LEFT = AlignX.toAlignX(PCT(0))
+  lazy val RIGHT = AlignX.toAlignX(PCT(100))
+  lazy val LEADING_X = AlignX.toAlignX(PCT(0))
+  lazy val TRAILING_Y = AlignX.toAlignX(PCT(100))
+}
+/** 
+ * No constructor for you, but YPos. Float, PCT, Int work as well as
+ * the vals AlignX.{ZERO_Y, CENTER_Y, LEFT, RIGHT, LEADING_Y, TRAILING_Y} 
+ */
+class AlignY private[smig] (a: String) {
+  override def toString = a
+}
+object AlignY {
+  implicit def toAlignY(p: YPos) =
+    new AlignY(p.toString.substring(1))
+  implicit def toAlignY(f: Float) = new AlignY(f.toString)
+  implicit def toAlignY(p: PCT) = new AlignY(p.value.getValue + "%")
+  implicit def toAlignY(uv: UV) = new AlignY(uv.toString)
+  implicit def toAlignY(uv: UnitValue) =
+    new AlignY(uv.getValue + UV.typeString(uv.getUnit))
+
+  lazy val ZERO_Y = AlignY.toAlignY(PX(0))
+  lazy val CENTER_Y = AlignY.toAlignY(PCT(50))
+  lazy val TOP = AlignY.toAlignY(PCT(0))
+  lazy val BOTTOM = AlignY.toAlignY(PCT(100))
+  lazy val LEADING_X = AlignY.toAlignY(PCT(0))
+  lazy val TRAILING_Y = AlignY.toAlignY(PCT(100))
 }
 
 /**
@@ -149,43 +182,26 @@ object HideMode extends Enumeration {
  *
  * Implements the Mig UnitValue
  *
- *
  * Privately constructed base class for unit values.  Use the derived
  * classes for strong typing.  Example: PX(2)
+ * Immutable
  */
-class UV private[smig] (createString: String) {
-  private[smig] var _str = createString
-  protected var _isHor = false
+class UV private[smig] (str: String, isHor: Boolean) {
   private[smig] lazy val value: UnitValue = {
-    ConstraintParser.parseUnitValue(_str, _isHor)
+    val sn = getClass.getSimpleName
+    ConstraintParser.parseUnitValue(str, isHor)
   }
-  private[smig] def this(unitValue: UnitValue) = this(unitValue.getConstraintString())
+  private[smig] def this(unitValue: UnitValue) = 
+    this(unitValue.getConstraintString(), unitValue.isHorizontal)
 
-  override def toString: String = _str
-  def +(uv: UV_Arith) : this.type = {
-    _str = _str + "+" + uv._str
-    this
-  }
-  def -(uv: UV_Arith) : this.type = {
-    _str = _str + "-" + uv._str
-    this
-  }
-  def +(f: Float) : this.type = {
-    _str = _str + "+" + f
-    this
-  }
-  def -(f: Float) : this.type = {
-    _str = _str + "-" + f
-    this
-  }
-  def *(f: Float) : this.type = {
-    _str = "(" + _str + ")*" + f
-    this
-  }
-  def /(f: Float) : this.type = {
-    _str = "(" + _str + ")/" + f
-    this
-  }
+  override def toString: String = str
+  def +(uv: UV_Arith) : UV = new UV(str + "+" + uv.toString, isHor)
+  
+  def -(uv: UV_Arith) : UV = new UV(str + "-" + uv.toString, isHor)
+  
+  def +(f: Float) : UV = new UV(str + "+" + f, isHor)
+  
+  def -(f: Float) : UV = new UV(str + "-" + f, isHor)
 }
 
 object UV {
@@ -238,122 +254,127 @@ object UV {
 }
 
 /** These may be used in arithmetic expressions operating on other UVs */
-class UV_Arith(createString: String) extends UV(createString)
+class UV_Arith(str: String, isHor: Boolean) extends UV(str, isHor) {
+  def *(f: Float) : UV = new UV("(" + str + ")*" + f, isHor)
+  
+  def /(f: Float) : UV = new UV("(" + str + ")/" + f, isHor)
+}
 
 /** UV for align. strongly typed AL(25) becomes "25.0al" */
-final class AL private (f: Float) extends UV(f + "al")
+final class AL private (f: Float) extends UV(f + "al", false)
 object AL { def apply(a: Float) = new AL(a) }
 
 /** Specialize UV for logical pixels so spaces try to grow with fonts. */
-final class LPX private (f: Float) extends UV_Arith(f + "lp") { _isHor = true }
+final class LPX private (f: Float) extends UV_Arith(f + "lp", true)
 object LPX { def apply(f: Float) = new LPX(f) }
 
 /** Specialize UV for logical pixels so spaces try to grow with fonts. */
-final class LPY private (f: Float) extends UV_Arith(f + "lp")
+final class LPY private (f: Float) extends UV_Arith(f + "lp", false)
 object LPY { def apply(f: Float) = new LPY(f) }
 
 /** UV for percent. strongly typed PCT(25) becomes "25.0%" */
-final class PCT private (percent: Float) extends UV(percent + "%")
+final class PCT private (percent: Float) extends UV(percent + "%", false)
 object PCT { def apply(percent: Float) = new PCT(percent) }
 
 /** Specialize UV for pixels */
-final class PX private (f: Float) extends UV_Arith(f + "px")
+final class PX private (f: Float) extends UV_Arith(f + "px", true)
 object PX { def apply(f: Float): PX = new PX(f) }
 
 /** Specialize UV for, you know, Screen Percentage */
-final class SPX private (f: Float) extends UV(f + "spx") { _isHor = true }
+final class SPX private (f: Float) extends UV_Arith(f + "spx", true)
 object SPX { def apply(f: Float): SPX = new SPX(f) }
 
 /** Specialize UV for, you know, Screen Percentage */
-final class SPY private (f: Float) extends UV(f + "spy")
+final class SPY private (f: Float) extends UV(f + "spy", false)
 object SPY { def apply(f: Float): SPY = new SPY(f) }
 
 /** Extend UV for inputting inches */
-final class IN private (f: Float) extends UV_Arith(f + "in")
+final class IN private (f: Float) extends UV_Arith(f + "in", false)
 object IN { def apply(f: Float) = new IN(f) }
 
 /** Extend UV for inputting millimeters */
-final class MM private (f: Float) extends UV_Arith(f + "mm")
+final class MM private (f: Float) extends UV_Arith(f + "mm", false)
 object MM { def apply(f: Float) = new MM(f) }
 
 /** Extend UV for inputting centimeters */
-final class CM private (f: Float) extends UV_Arith(f + "cm")
+final class CM private (f: Float) extends UV_Arith(f + "cm", false)
 object CM { def apply(f: Float) = new CM(f) }
 
 /** Container X1 for use in expressions */
-object ContX1 extends UV_Arith("container.x")
+object ContX1 extends UV_Arith("container.x", true)
 
 /** Container X2 for use in expressions */
-object ContX2 extends UV_Arith("container.x2")
+object ContX2 extends UV_Arith("container.x2", true)
 
 /** Container Y1 for use in expressions */
-object ContY1 extends UV_Arith("container.y")
+object ContY1 extends UV_Arith("container.y", false)
 
 /** Container Y2 for use in expressions */
-object ContY2 extends UV_Arith("container.y2")
+object ContY2 extends UV_Arith("container.y2", false)
 
 /** Container Width for use in expressions */
-object ContW extends UV_Arith("container.w")
+object ContW extends UV_Arith("container.w", true)
 
 /** Container Height for use in expressions */
-object ContH extends UV_Arith("container.h")
+object ContH extends UV_Arith("container.h", false)
 
 /** Container screen X for use in expressions */
-object ContXPos extends UV_Arith("container.xpos")
+object ContXPos extends UV_Arith("container.xpos", true)
 
 /** Container screen Y for use in expressions */
-object ContYPos extends UV_Arith("container.ypos")
+object ContYPos extends UV_Arith("container.ypos", false)
 
 /** Container X1 minus insets for use in expressions */
-object VisualX1 extends UV_Arith("visual.x")
+object VisualX1 extends UV_Arith("visual.x", true)
 
 /** Container X2 minus insets for use in expressions */
-object VisualX2 extends UV_Arith("visual.x2")
+object VisualX2 extends UV_Arith("visual.x2", true)
 
 /** Container Y1 minus insets for use in expressions */
-object VisualY1 extends UV_Arith("visual.y")
+object VisualY1 extends UV_Arith("visual.y", false)
 
 /** Container Y2 minus insets for use in expressions */
-object VisualY2 extends UV_Arith("visual.y2")
+object VisualY2 extends UV_Arith("visual.y2", false)
 
 /** Container Width minus insets for use in expressions */
-object VisualW extends UV_Arith("visual.h")
+object VisualW extends UV_Arith("visual.w", true)
 
 /** Container Height minus insets for use in expressions */
-object VisualH extends UV_Arith("visual.w")
+object VisualH extends UV_Arith("visual.h", false)
 
 /** Container screen X minus insets for use in expressions */
-object VisualXPos extends UV_Arith("visual.xpos")
+object VisualXPos extends UV_Arith("visual.xpos", true)
 
 /** Container screen Y minus insets for use in expressions */
-object VisualYPos extends UV_Arith("visual.ypos")
+object VisualYPos extends UV_Arith("visual.ypos", false)
 
 /** Component min size for use in expressions */
-object Min extends UV_Arith("min")
+object Min extends UV_Arith("min", false)
 
 /** Component max size for use in expressions */
-object Max extends UV_Arith("max")
+object Max extends UV_Arith("max", false)
 
 /** Component preferred size for use in expressions */
-object Pref extends UV_Arith("pref")
+object Pref extends UV_Arith("pref", false)
 
 /** Platform specific X spacing for related objects. */
-object RelX extends UV_Arith("rel")
+object Rel extends UV_Arith("rel", true)
 /** Platform specific Y spacing for related objects. */
-object UnrelX extends UV_Arith("unrel")
+object Unrel extends UV_Arith("unrel", true)
 /** Platform specific X spacing for unrelated objects. */
-object RelY extends UV_Arith("rel")
-/** Platform specific Y spacing for unrelated objects. */
-object UnrelY extends UV_Arith("unrel")
+object ButtonMin extends UV_Arith("button", false)
+/** Platform specific standard indent. */
+object Indent extends UV_Arith("indent", false)
+
 
 /** X1 of component, from related ID, for use in expressions. */
-final class IdX1 private[smig] (id: ID) extends UV_Arith(id + ".x")
+final class IdX1 private[smig] (id: ID) extends UV_Arith(id + ".x", true)
 /** Y1 of component, from related ID, for use in expressions. */
-final class IdY1 private[smig] (id: ID) extends UV_Arith(id + ".y")
+final class IdY1 private[smig] (id: ID) extends UV_Arith(id + ".y", false)
 /** X2 of component, from related ID, for use in expressions. */
-final class IdX2 private[smig] (id: ID) extends UV_Arith(id + ".x2")
+final class IdX2 private[smig] (id: ID) extends UV_Arith(id + ".x2", true)
 /** Y2 of component, from related ID, for use in expressions. */
-final class IdY2 private[smig] (id: ID) extends UV_Arith(id + ".y2")
+final class IdY2 private[smig] (id: ID) extends UV_Arith(id + ".y2", false)
 
 /** Unique identifier for component, used in expressions */
 final class ID private[smig] (id: String) {
@@ -373,11 +394,14 @@ final class ID private[smig] (id: String) {
  * FS means freestyle.  Allow inputting any old crap without any checking.
  * Go hang yourself.
  */
-final class FS private (s: String) extends UV(s)
+final class FS private (s: String) extends UV(s, false)
 object FS { def apply(s: String) = new FS(s) }
 
 /** Extend UV for null field in BS */
-final object N extends UV("n")
+final object N extends UV("n", false)
+
+/** Extend UV for copying "pref" field in BS. Usage BS(S, 20, S) */
+final object S extends UV("Same", false)
 
 /**
  *   BBBBB   SSSS
@@ -388,46 +412,36 @@ final object N extends UV("n")
  *
  * Implements the Mig BoundSize
  */
-class BS(min: UV, pref: UV, max: UV) {
-  private[this] var v_min: UV = if (min == null) N else min
-  private[this] var v_pref: UV = if (pref == null) N else pref
-  private[this] var v_max: UV = if (max == null) N else max
-  private[this] var _push: Boolean = _
-
-  /** All nulls */
-  def this() = this(N, N, N)
-
-  /** Contains preferred value only. */
-  def this(pref: UV) = this(N, pref, N)
-
-  /** Contains minimum and preferred values only. */
-  def this(min: UV, pref: UV) = this(min, pref, N)
-
-  def getMin = min
-  def getPref = pref
-  def getMax = max
-  def isPush = _push
-
-  def min(uv: UV): this.type = { v_min = uv; this }
-  def pref(uv: UV): this.type = { v_pref = uv; this }
-  def max(uv: UV): this.type = { v_max = uv; this }
-  def push : this.type = { _push = true; this }
+class BS(min: UV, pref: UV, max: UV, push: Boolean) {
+  val getMin: UV = defaultToPref(min)
+  val getPref: UV = if (pref == null) N else pref
+  val getMax: UV = defaultToPref(max)
+    
+  private def defaultToPref(uv: UV) : UV = 
+    uv match { case S => pref; case null => N; case _ => min; }
+  
+  def isPush = push
 
   /** @return The string that could be used in java */
   override def toString(): String = {
     val sb = new StringBuilder().append(min).append(':').append(pref).
       append(':').append(max)
-    if (_push) sb.append(':').append("push")
+    if (push) sb.append(':').append("push")
     sb.toString()
   }
 }
 
 /* Conversions, creation methods for Bound Size. */
 object BS {
-  def apply(): BS = new BS()
-  def apply(pref: UV): BS = new BS(pref)
-  def apply(min: UV, pref: UV): BS = new BS(min, pref)
-  def apply(min: UV, pref: UV, max: UV): BS = new BS(min, pref, max)
+  /** All nulls */
+  def apply(): BS = new BS(N, N, N, false)
+  
+  def apply(pref: UV): BS = new BS(N, pref, N, false)
+  def apply(pref: UV, push: Boolean): BS = new BS(N, pref, N, push)
+  def apply(min: UV, pref: UV): BS = new BS(min, pref, null, false)
+  def apply(min: UV, pref: UV, push: Boolean): BS = new BS(min, pref, null, push)
+  def apply(min: UV, pref: UV, max: UV): BS = new BS(min, pref, max, false)
+  def apply(min: UV, pref: UV, max: UV, push: Boolean): BS = new BS(min, pref, max, push)
 
   /** Convert an Int to a BS */
   implicit def toBS(i: Int): BS = {
@@ -463,7 +477,7 @@ object BS {
 class LC private[smig] (lc: net.miginfocom.layout.LC) {
   private val _lc = lc
 
-  /** An XPos. Float, PCT or UV will be converted */
+  /** An XPos, Float, PCT or UV will be converted */
   def alignX(align: AlignX): this.type = {
     require(align != null)
     _lc.alignX(align.toString)
@@ -648,7 +662,7 @@ class LC private[smig] (lc: net.miginfocom.layout.LC) {
    * 4. ZeroSquareNoGaps - If hidden the component will be disregarded
    * completely and not take up a cell in the grid.
    */
-  def hideMode(hideMode: HideMode.Value) = _lc.hideMode(hideMode.id)
+  def hideMode(hideMode: HideMode) = _lc.hideMode(hideMode.id)
   def getHideMode = HideMode(_lc.getHideMode)
 
   /**
@@ -861,12 +875,12 @@ class RowC private[smig] (ac: net.miginfocom.layout.AC) extends AC {
   private[smig] def this() = this(new net.miginfocom.layout.AC())
 
   /** Row's default alignment */
-  def align(align: YPos.Value): this.type = {
+  def align(align: YPos): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1))
     this
   }
-  def align(align: YPos.Value, indexes: Int*): this.type = {
+  def align(align: YPos, indexes: Int*): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1), indexes: _*)
     this
@@ -882,12 +896,12 @@ class ColC private[smig] (ac: net.miginfocom.layout.AC) extends AC {
   private[smig] def this() = this(new net.miginfocom.layout.AC())
 
   /** Column's default alignment */
-  def align(align: XPos.Value): this.type = {
+  def align(align: XPos): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1))
     this
   }
-  def align(align: XPos.Value, indexes: Int*): this.type = {
+  def align(align: XPos, indexes: Int*): this.type = {
     require(align != null)
     _ac.align(align.toString.substring(1), indexes: _*)
     this
@@ -1261,14 +1275,14 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
    * else is docked.  Operates independent of normal cell range
    * @return Fresh CC
    */
-  def dock(dock: Dock.Value, comp: Component): CC = {
+  def dock(dock: Dock, comp: Component): CC = {
     val cc = install(comp)
     val j = cc.java
     dock match {
-      case Dock.North => j.dockNorth
-      case Dock.West => j.dockWest
-      case Dock.South => j.dockSouth
-      case Dock.East => j.dockEast
+      case North => j.dockNorth
+      case West => j.dockWest
+      case South => j.dockSouth
+      case East => j.dockEast
       case _ =>
     }
     cc
@@ -1707,10 +1721,10 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
     /** @return y coordinate */
     def getCellY: Int = _cc.getCellY
 
-    def getDock: Dock.Value = Dock(_cc.getDockSide)
+    def getDock: Dock = Dock(_cc.getDockSide)
 
     /**
-     * Specifies that the component should be put in the X end group grp and
+     * Specifies that the component should be put in the X end group "grp" and
      * will thus share the same ending coordinate as them within the group.
      * @return this
      */
@@ -1735,7 +1749,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
 
     /**
      * Convenience method for what is required to make something fill space in
-     * the X direction.  It is shorthand for growX.pushX
+     * the X direction.  It is shorthand for growY.pushY
      */
     def fillY: this.type = { _cc.growY; _cc.pushY; this }
 
@@ -1796,7 +1810,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
       _cc.growPrioX(i)
       this
     }
-    def getgrowPrioX = _cc.getHorizontal.getGrowPriority
+    def getGrowPrioX = _cc.getHorizontal.getGrowPriority
 
     /** The Y grow priority compared to other components in the same cell. */
     def growPrioY(i: Int): this.type = {
@@ -1804,7 +1818,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
       _cc.growPrioY(i)
       this
     }
-    def getgrowPrioY = _cc.getHorizontal.getGrowPriority
+    def getGrowPrioY = _cc.getHorizontal.getGrowPriority
 
     /**
      * The minimum width for the component. The value will override any value
@@ -1966,7 +1980,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
     def spanY(h: Int): this.type = { _cc.spanY(h); this }
     def getSpanY: Int = _cc.getSpanY
 
-    def tag(t: String): this.type = { _cc.tag(t); this }
+    def tag(t: Tag): this.type = { _cc.tag(t.toString); this }
     /**
      * @return The tag string
      */
