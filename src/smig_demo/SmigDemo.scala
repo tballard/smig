@@ -6,17 +6,20 @@ package smig_demo
 
 import java.awt.Color._
 import java.awt.Insets
-import java.awt.{ Dimension, Font, Point, Color, Graphics, Graphics2D, GradientPaint }
+import java.awt.{ Dimension, Font, Point, Color, Graphics, Graphics2D, 
+                 GradientPaint }
 import java.awt.Font._
 import javax.swing.SwingUtilities
 import scala.collection.mutable.HashMap
 import scala.swing.event.{ ButtonClicked, MouseMoved }
-import scala.swing.{ Button, Component, Container, Label, MainFrame, Panel, Publisher, SimpleSwingApplication, Swing }
+import scala.swing.{ Button, Component, Container, Label, MainFrame,
+                    Panel, Publisher, SimpleSwingApplication, Swing }
 import javax.swing.{ JComponent, JPanel, Timer }
 import net.miginfocom.layout.{ BoundSize, ComponentWrapper, UnitValue }
 import scala.swing.Swing._
 import scala.util.Random
-import smig.{ AlignX, AlignY, BS, ContX1, ContY1, ID, LC, MigCallback, MigPanel, Pref, RowC, ColC, PX, PCT, RelX, UV }
+import smig.{ AlignX, AlignY, BS, ContX1, ContY1, ID, Indent, LC, MigCallback, 
+             MigPanel, Pref, RowC, ColC, PX, PCT, Rel, UV }
 import smig.AlignX._
 import smig.AlignY._
 import smig.Dock._
@@ -24,6 +27,7 @@ import smig.XPos._
 import smig.YPos._
 import java.awt.event.{ ActionEvent, ActionListener }
 import net.miginfocom.layout.LayoutCallback
+import scala.swing.Alignment._
 import scala.swing.event.MouseExited
 import scala.swing.event.MouseEntered
 
@@ -163,8 +167,8 @@ object SmigDemo extends SimpleSwingApplication {
 
   private def centeredDemo = new MigPanel() {
     border = titled("Centering")
-    add(new BLbl("Center me, baby")).alignX(AlignX.CENTER).pushX.
-    alignY(AlignY.CENTER).pushY
+    add(new BLbl("Center me, baby")).alignX(CENTER_X).pushX.
+    alignY(AlignY.CENTER_Y).pushY
   }
 
   private def gapDemo = new MigPanel() {
@@ -226,15 +230,14 @@ object SmigDemo extends SimpleSwingApplication {
   }
 
   private def endGroupDemo = new MigPanel() {
-    border = titled("EndGroup: 'X' works, '?' not so much")
-    put(new BLbl("0"))
-    put(new BLbl("?")).endGroupX("one")
-    put(new BLbl("0"))
-    put(new BLbl("X")).endGroupX("two")
-    put(new BLbl("000000000000000000000000000000"))
-    goto(0, 1).put(new BLbl("?????")).endGroupX("one")
-    put(new BLbl("XX")).endGroupX("two")
-    goto(0, 2).add(new BLbl("XX")).endGroupX("two")
+     val b1 = put(new BLbl("Align from me guys.")).
+        endGroupX("g").pos(Indent, 5).id
+     val b2 = put(new BLbl("Falling in line.")).
+        endGroupX("g").pos(Indent * 2, b1.y2 + Rel).id
+     val b3 = put(new BLbl("Right in there.")).
+        endGroupX("g").pos(Indent * 3, b2.y2 + Rel).id
+     val b4 = put(new BLbl("Me, too.")).
+        endGroupX("g").pos(Indent * 4, b3.y2 + Rel).id
   }
 
   private def buttonsDemo = new MigPanel() {
@@ -255,7 +258,7 @@ object SmigDemo extends SimpleSwingApplication {
           (if (id == null) {
             put(lbl).pos(ContX1 + 5, ContY1 + 20)
           } else {
-            put(lbl).pos(id.x2 + RelX, id.y1 + rand.nextInt(21) - 10)
+            put(lbl).pos(id.x2 + Rel, id.y1 + rand.nextInt(21) - 10)
           }).id)
       }
     }
@@ -263,7 +266,7 @@ object SmigDemo extends SimpleSwingApplication {
 
   /** This is a rewrite of the callback demo that comes with Mig */
   private def callbackDemo = new MigPanel(
-    LC().alignX(AlignX.CENTER).alignY(AlignY.BOTTOM)) with ActionListener {
+    LC().alignX(CENTER_X).alignY(AlignY.BOTTOM)) with ActionListener {
     border = titled("MiG Layout Callback Demo - Click a button")
     preferredSize = new Dimension(400, 120)
     private val _repaintTimer = new Timer(100, this)
@@ -353,7 +356,8 @@ object SmigDemo extends SimpleSwingApplication {
         _mousePos = null;
         revalidate
       case ButtonClicked(button) =>
-        _pressMap.put(button.asInstanceOf[Component], System.currentTimeMillis());
+        _pressMap.put(button.asInstanceOf[Component],
+                      System.currentTimeMillis());
         _repaintTimer.start();
     }
   }
@@ -366,6 +370,7 @@ object SmigDemo extends SimpleSwingApplication {
 
   private class BLbl(text: String) extends Label(text) {
     border = bord
+    horizontalAlignment = Center
   }
 
   private class TBLbl(text: String, title: String) extends Label(text) {
