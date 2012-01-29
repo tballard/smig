@@ -176,7 +176,7 @@ object AlignY {
 /**
  *   U    U V   V
  *   U    U V   V
- *   U    U V   V ************************************************************
+ *   U    U V   V **************************************************************
  *   U    U  V V  
  *    VVVV    V
  *
@@ -196,11 +196,8 @@ class UV private[smig] (str: String, isHor: Boolean) {
 
   override def toString: String = str
   def +(uv: UV_Arith) : UV = new UV(str + "+" + uv.toString, isHor)
-  
   def -(uv: UV_Arith) : UV = new UV(str + "-" + uv.toString, isHor)
-  
   def +(f: Float) : UV = new UV(str + "+" + f, isHor)
-  
   def -(f: Float) : UV = new UV(str + "-" + f, isHor)
 }
 
@@ -256,7 +253,6 @@ object UV {
 /** These may be used in arithmetic expressions operating on other UVs */
 class UV_Arith(str: String, isHor: Boolean) extends UV(str, isHor) {
   def *(f: Float) : UV = new UV("(" + str + ")*" + f, isHor)
-  
   def /(f: Float) : UV = new UV("(" + str + ")/" + f, isHor)
 }
 
@@ -406,7 +402,7 @@ final object S extends UV("Same", false)
 /**
  *   BBBBB   SSSS
  *   B    B S
- *   BBBBB   SSSS  ************************************************************
+ *   BBBBB   SSSS  *************************************************************
  *   B    B      S
  *   BBBBBB SSSSS
  *
@@ -444,9 +440,7 @@ object BS {
   def apply(min: UV, pref: UV, max: UV, push: Boolean): BS = new BS(min, pref, max, push)
 
   /** Convert an Int to a BS */
-  implicit def toBS(i: Int): BS = {
-    BS(UV.toUV(i))
-  }
+  implicit def toBS(i: Int): BS = BS(UV.toUV(i))
 
   /** Convert a UV to a BS */
   implicit def toBS(uv: UV): BS = BS(uv)
@@ -454,15 +448,15 @@ object BS {
   implicit def toBS(unitValue: UnitValue): BS = toBS(UV.toUV(unitValue))
 
   /** Convert a java BoundSize to a scala BS */
-  implicit def toBS(boundSize: BoundSize): BS = {
+  implicit def toBS(boundSize: BoundSize): BS = 
     BS(
       UV.toUV(boundSize.getMin),
       UV.toUV(boundSize.getPreferred),
       UV.toUV(boundSize.getMax))
-  }
 
   implicit def toBoundSize(bs: BS): BoundSize =
-    new BoundSize(bs.getMin.value, bs.getPref.value, bs.getMax.value, bs.isPush, null)
+    new BoundSize(bs.getMin.value, bs.getPref.value, bs.getMax.value,
+                  bs.isPush, null)
 }
 
 /**
@@ -953,22 +947,25 @@ private[smig] class Out(s: String) {
 }
 
 /** 
- * If any callback is added for a component we maintain one of these in a map for
- * it. It holds any of the 3 methods that may be registered.
+ * If any callback is added for a component we maintain one of these in a map
+ * for it. It holds any of the 3 methods that may be registered.
  */
 private[smig] class MigCallback(comp: Component) {
   def component = comp
   /**
    * @return a [x, y, x2, y2] position similar to the "pos" in the component
-   * constraint. If defined, any non-null ones override the ones specified on the CC.
+   * constraint. If defined, any non-null ones override the ones specified on
+   * the CC.
    */
   var position: (Component) => Option[(UV, UV, UV, UV)] = _
-  /** @return a size similar to the "width" and "height" in the component constraint. */
+  /** @return a size similar to the "width" and "height" in the component 
+   * constraint. */
   var size: (Component) => Option[(BS, BS)] = _
   /**
-   * A last minute change of the bounds. The bound for the layout cycle has been
-   * set and you can correct there using any set of rules you like.
-   * @param screenBounds these are the bounds that will be used if we return null
+   * A last minute change of the bounds. The bound for the layout cycle has
+   * been set and you can correct there using any set of rules you like.
+   * @param screenBounds these are the bounds that will be used if we return
+   * null
    * @return bounds to actually use
    */
   var correctBounds: (Component) => Option[(Int, Int, Int, Int)] = _
@@ -1020,7 +1017,8 @@ private object SmigLayoutCallback extends LayoutCallback {
     callback match {
       case Some(callback) =>
         callback.getCorrectBounds match {
-          case (i1, i2, i3, i4) => callback.component.peer.setBounds(i1, i2, i3, i4)
+          case (i1, i2, i3, i4) => 
+            callback.component.peer.setBounds(i1, i2, i3, i4)
           case _ =>
         }
       case _ =>
@@ -1032,13 +1030,14 @@ object MigPanel {
   private var _unique: Int = 0;
 
   /** Allow recovering Components based on the peer when doing callback */
-  private[smig] lazy val _callbacksByPeer = new WeakHashMap[JComponent, MigCallback]
+  private[smig] lazy val _callbacksByPeer = 
+    new WeakHashMap[JComponent, MigCallback]
 
   /**
    * May be used to generate unique group names.
    * Assume done in awt dispatch thread.
    */
-  def getGroupName: String = {
+  def uniqueGroupName: String = {
      _unique += 1
      "MigUtilBtnGroup_" + _unique
   }
@@ -1047,7 +1046,7 @@ object MigPanel {
    * May be used to generate unique ids.
    * Assume done in awt dispatch thread.
    */
-  private[smig] def getIdString: String = {
+  private[smig] def uniqueIdString: String = {
     _unique += 1
     "ID_" + _unique
   }
@@ -1071,7 +1070,7 @@ object MigPanel {
   def createSpringDebug(bg: Color): Spring = new Spring().debug(bg)
 }
 
-/***********************************************************************************
+/*******************************************************************************
  * A container configured with a MigLayout. You are so lucky.
  *
  * I decided the normal way of specifying position was slightly broken.
@@ -1080,9 +1079,9 @@ object MigPanel {
  * always added to the constraints as a cell.  There is an origin, originally
  * defined as (0, 0).  There is a cursor "_pt" holding the current position.
  * The "put" methods add a component at the cursor.  The "add" methods  do the
- * same but increment the cursor.  The "dock" methods have been added to the
+ * same but increment the cursor.  The "dock" methods have been moved to the
  * MigPanel.
- **********************************************************************************/
+ ******************************************************************************/
 class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
   colC: Option[ColC])
   extends Panel with LayoutContainer {
@@ -1101,7 +1100,8 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
     new JPanel(new MigLayout(
       _lc.java,
       rowC match { case None => null; case Some(rowC) => rowC.java },
-      colC match { case None => null; case Some(colC) => colC.java })) with SuperMixin
+      colC match { case None => null; case Some(colC) => colC.java })
+  ) with SuperMixin
   private def mig = peer.getLayout.asInstanceOf[MigLayout]
 
   /** Basically you can just leave out any null args */
@@ -1366,10 +1366,9 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
 
   /** Debug tool tip stuff */
   private def str(ac: AC, tip: StringBuilder) {
-    var i = 0
-    ac.java.getConstaints.foreach(c => {
-      i += 1
-      tip.append(i).append(".<br>")
+    ac.java.getConstaints.iterator.zipWithIndex.foreach(pair => { 
+      val c = pair._1  
+      tip.append(pair._2).append(".<br>")
       row(tip, "Align", c.getAlign)
       row(tip, "EndGroup", c.getEndGroup)
       row(tip, "GapAfter", c.getGapAfter)
@@ -1463,9 +1462,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
   }
 
   /** Tool tip printing */
-  private def str(dim: Dimension): String = {
-    dim.width + " X " + dim.height
-  }
+  private def str(dim: Dimension): String = dim.width + " X " + dim.height
 
   /** Tool tip printing */
   private def str(pad: Array[UnitValue]): String = {
@@ -1520,9 +1517,8 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
    * @param container add in this container which is using MigLayout
    * @param btns add this components, centered on row and with same width
    */
-  def addBtnRow(sameSize: Boolean, btns: Component*): Unit = {
+  def addBtnRow(sameSize: Boolean, btns: Component*): Unit =
     addBtnRow(-1, sameSize, btns: _*)
-  }
 
   /**
    * Flow in layout should be X
@@ -1533,11 +1529,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
    */
   def addBtnRow(row: Int, sameSize: Boolean, btns: Component*) {
     require(isFlowX)
-    val spaceSizeGroup = MigPanel.getGroupName
-    var btnSizeGroup: String = null
-    if (sameSize) {
-      btnSizeGroup = MigPanel.getGroupName
-    }
+    val spaceSizeGroup = MigPanel.uniqueGroupName
     if (row >= 0) {
       goto(0, row)
     }
@@ -1548,7 +1540,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
       gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0).fillX
     val cb = cc.gapLeft(bs0).gapRight(bs0).gapTop(bs0).gapBottom(bs0)
     if (sameSize) {
-      cb.sizeGroupX(btnSizeGroup)
+      cb.sizeGroupX(MigPanel.uniqueGroupName)
     }
     btns.foreach(comp => {
       put(cs, MigPanel.createSpring)
@@ -1590,10 +1582,10 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
 
   /**
    * Adds the callback functions that will be called at different stages of the
-   * layout cycle.  Because the java LayoutCallback methods are called with the peer
-   * we register each component individually and map peer to a MigCallback that
-   * holds the Component, and 3 callback methods.  Since the components are unique
-   *  in the world, we use a weak global map.
+   * layout cycle.  Because the java LayoutCallback methods are called with the
+   * peer we register each component individually and map peer to a MigCallback
+   * that holds the Component, and 3 callback methods.  Since the components
+   * are unique in the world, we use a weak global map.
    * @param callback Something overriding a method or more in Callback
    * @param comps Components to use the callback.
    */
@@ -1610,7 +1602,10 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
     }
   }
 
-  /** Add callback function to return absolute position relative to container. */
+  /** 
+   * Add callback function to return absolute position relative to
+   * container. 
+   */
   def addPositionCallback(callback: (Component) => Option[(UV, UV, UV, UV)],
     comps: Component*) {
     comps.foreach(comp => { migCallback(comp).position = callback })
@@ -1629,8 +1624,8 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
    * for the layout cycle has been set and you can correct there using
    * any set of rules you like.
    */
-  def addCorrectBoundsCallback(callback: (Component) => Option[(Int, Int, Int, Int)],
-    comps: Component*) {
+  def addCorrectBoundsCallback(callback: (Component) =>
+    Option[(Int, Int, Int, Int)], comps: Component*) {
     comps.foreach(comp => { migCallback(comp).correctBounds = callback })
     initCallbacks
   }
@@ -1642,7 +1637,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
     }
 
   /** If several components want to use the same constraints. */
-  def cc = new CC()
+  def cc = new CC
 
   /**
    *   CCCC    CCCC
@@ -1656,8 +1651,9 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
 
   type CC = Constraints // more natural for mig users
 
-  class Constraints private[smig] (cc: net.miginfocom.layout.CC) extends Cloneable {
-    private[smig] var _cc = cc
+  class Constraints private[smig] (cc: net.miginfocom.layout.CC) 
+  extends Cloneable {
+    private[smig] val _cc = cc
 
     def this() = this(new net.miginfocom.layout.CC())
 
@@ -1993,7 +1989,7 @@ class MigPanel private[this] (lc: Option[LC], rowC: Option[RowC],
      * calculations using it.  You can put this on the end of a CC 
      * expression and catch the value. */
     def id: ID = {
-      val id = MigPanel.getIdString
+      val id = MigPanel.uniqueIdString
       _cc.setId(id)
       new ID(id)
     }
@@ -2021,4 +2017,3 @@ class Spring private[smig] () extends Component {
     this
   }
 }
-
